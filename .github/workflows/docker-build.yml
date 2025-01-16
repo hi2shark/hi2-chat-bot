@@ -38,9 +38,6 @@ jobs:
     - name: Print version
       run: echo "Version is $VERSION"
 
-    - name: Build
-      run: npm run build
-
     - name: Build Docker image
       run: |
         docker build -t ghcr.io/${{ github.repository }}:$VERSION .
