@@ -1,0 +1,55 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to use for the Docker image'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Determine version
+      id: determine_version
+      run: |
+        if [ -z "${{ github.event.inputs.version }}" ]; then
+          echo "VERSION=$(node -p 'require("./package.json").version')" >> $GITHUB_ENV
+        else
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+        fi
+
+    - name: Print version
+      run: echo "Version is $VERSION"
+
+    - name: Build
+      run: npm run build
+
+    - name: Build Docker image
+      run: |
+        docker build -t ghcr.io/${{ github.repository }}:$VERSION .
+
+    - name: Log in to GitHub Container Registry
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Push Docker image
+      run: |
+        docker push ghcr.io/${{ github.repository }}:$VERSION
+        docker tag ghcr.io/${{ github.repository }}:$VERSION ghcr.io/${{ github.repository }}:latest
+        docker push ghcr.io/${{ github.repository }}:latest
