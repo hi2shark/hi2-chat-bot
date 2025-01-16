@@ -103,6 +103,20 @@ class ChatBot {
   }
 
   /**
+   * 从回复消息中解析原消息ID
+   * @param {Object} msg Telegram消息对象
+   * @returns {number|null} 解析出的消息ID，解析失败返回null
+   * @description 用于删除消息
+   */
+  matchMessageId(msg) {
+    if (!msg?.reply_to_message?.text?.match) {
+      return null;
+    }
+    const matchMessageId = msg.reply_to_message.text.match(/MsgId:\s+(\d+)/);
+    return matchMessageId ? +matchMessageId[1] : null;
+  }
+
+  /**
    * 拉黑用户
    * @param {Object} msg 包含要拉黑用户ID的回复消息
    */
@@ -165,6 +179,9 @@ class ChatBot {
         case '/dc':
           this.dcPing(msg);
           break;
+        case '/del':
+          this.handleRemoveMessage(msg);
+          break;
         default:
           break;
       }
@@ -194,20 +211,58 @@ class ChatBot {
    * @param {Object} msg Telegram消息对象
    * @description 处理管理员和普通用户的私聊消息转发
    */
-  handlePrivateMessage(msg) {
+  async handlePrivateMessage(msg) {
     if (msg.from.id === this.myChatId) {
       if (msg.reply_to_message) {
         const replyUserId = this.matchFromUserId(msg);
         if (replyUserId) {
-          this.bot.copyMessage(replyUserId, msg.chat.id, msg.message_id);
+          this.bot.copyMessage(
+            replyUserId,
+            msg.chat.id,
+            msg.message_id,
+          ).then((res) => {
+            // 转发成功会，对该消息进行引用
+            this.bot.sendMessage(
+              this.myChatId,
+              `MsgId: ${res.message_id} - From: ${replyUserId}`,
+              {
+                reply_to_message_id: msg.message_id
+              },
+            );
+          });
         }
       }
     } else {
       if (this.banList.includes(msg.from.id)) {
         return;
       }
-      this.bot.forwardMessage(this.myChatId, msg.chat.id, msg.message_id);
-      this.bot.sendMessage(this.myChatId, `From: ${msg.chat.id}`);
+      this.bot.forwardMessage(
+        this.myChatId,
+        msg.chat.id,
+        msg.message_id,
+      ).then((res) => {
+        this.bot.sendMessage(this.myChatId, `From: ${msg.chat.id}`, {
+          reply_to_message_id: res.message_id,
+        });
+      });
+    }
+  }
+
+  /**
+   * 处理删除消息
+   */
+  handleRemoveMessage(msg) {
+    if (!msg.reply_to_message) {
+      return;
+    }
+    const messageId = this.matchMessageId(msg);
+    const replyUserId = this.matchFromUserId(msg);
+    if (replyUserId && messageId) {
+      this.bot.deleteMessage(replyUserId, messageId).then(() => {
+        this.bot.sendMessage(this.myChatId, `MsgId: ${messageId} - 已删除`, {
+          reply_to_message_id: msg.message_id,
+        });
+      });
     }
   }
 
