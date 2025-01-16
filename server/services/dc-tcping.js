@@ -8,6 +8,9 @@ const dc4 = '149.154.167.91';
 const dc5 = '91.108.56.100';
 
 module.exports = async () => {
-  const tcpings = [dc1, dc2, dc3, dc4, dc5].map((dc) => tcping(dc, 443));
+  const tcpings = [dc1, dc2, dc3, dc4, dc5].map((dc) => tcping(dc, 443).then((res) => res).catch((error) => {
+    console.log(error);
+    return null;
+  }));
   return Promise.all(tcpings);
 };

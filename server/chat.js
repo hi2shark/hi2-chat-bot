@@ -43,7 +43,9 @@ class ChatBot {
     this.banList = [];
     this.initBanJson();
     this.initMessageHandler();
-    this.eachReportUptime();
+    if (this.uptimeUrl) {
+      this.eachReportUptime();
+    }
   }
 
   /**
@@ -175,7 +177,12 @@ class ChatBot {
    */
   dcPing(msg) {
     TGDCTcping().then((res) => {
-      this.bot.sendMessage(msg?.chat?.id || this.myChatId, res.map((i, index) => `Tcping DC${index + 1}: ${i}ms`).join('\n'));
+      this.bot.sendMessage(msg?.chat?.id || this.myChatId, res.map((i, index) => {
+        if (i === null) {
+          return `DC${index + 1}: timeout`;
+        }
+        return `DC${index + 1}: ${i}ms`;
+      }).join('\n'));
     }).catch((error) => {
       console.log(error);
       this.bot.sendMessage(this.myChatId, `tg dc ping error: ${error?.message}`);
@@ -219,7 +226,7 @@ class ChatBot {
       }
     });
     // 启动成功后通知管理员
-    this.bot.sendMessage(this.myChatId, '✨ ✨ ✨\n Bot启动成功 🚀');
+    this.bot.sendMessage(this.myChatId, '✨🤖✨🤖✨🤖✨\n ChatBot启动成功');
     this.dcPing();
   }
 

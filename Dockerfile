@@ -5,11 +5,7 @@ FROM node:20
 WORKDIR /app
 
 # Copy package files for dependency installation
-COPY package*.json ./
-
-# Copy server directory and index.js
-COPY server/ ./server/
-COPY index.js .
+COPY . ./
 
 # Install dependencies
 RUN npm install
