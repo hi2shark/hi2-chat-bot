@@ -25,7 +25,7 @@ UPTIME_INTERVAL=60
 | `/banlist` | 私聊 | 查看拉黑列表，只记录的userid |
 | `/ping` | 任意 | 查看机器人是否在线 |
 | `/dc` | 任意 | 机器人与Telegram服务器的Tcping值，参考值 |
-| `/del` | 私聊 | 对`MsgId: xxxx - From: xxxxxxxxxx`的消息回复`/del`，即可删除这条你回复的消息 |
+| `/del` | 私聊 | 对`MsgId: xxxx - To: xxxxxxxxxx`的消息回复`/del`，即可删除这条你回复的消息 |
 
 
 ## Docker Compose 部署
