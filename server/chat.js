@@ -103,6 +103,19 @@ class ChatBot {
   }
 
   /**
+   * 从回复消息中解析目标用户ID
+   * @param {Object} msg Telegram消息对象
+   * @returns {number|null} 解析出的用户ID，解析失败返回null
+   */
+  matchToUserId(msg) {
+    if (!msg?.reply_to_message?.text?.match) {
+      return null;
+    }
+    const matchUserId = msg.reply_to_message.text.match(/To:\s+(\d+)/);
+    return matchUserId ? +matchUserId[1] : null;
+  }
+
+  /**
    * 从回复消息中解析原消息ID
    * @param {Object} msg Telegram消息对象
    * @returns {number|null} 解析出的消息ID，解析失败返回null
@@ -220,7 +233,7 @@ class ChatBot {
             // 转发成功会，对该消息进行引用
             this.bot.sendMessage(
               this.myChatId,
-              `MsgId: ${res.message_id} - From: ${replyUserId}`,
+              `MsgId: ${res.message_id} - To: ${replyUserId}`,
               {
                 reply_to_message_id: msg.message_id
               },
@@ -252,9 +265,9 @@ class ChatBot {
       return;
     }
     const messageId = this.matchMessageId(msg);
-    const replyUserId = this.matchFromUserId(msg);
-    if (replyUserId && messageId) {
-      this.bot.deleteMessage(replyUserId, messageId).then(() => {
+    const toUserId = this.matchToUserId(msg);
+    if (toUserId && messageId) {
+      this.bot.deleteMessage(toUserId, messageId).then(() => {
         this.bot.sendMessage(this.myChatId, `MsgId: ${messageId} - 已删除`, {
           reply_to_message_id: msg.message_id,
         });
