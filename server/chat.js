@@ -169,11 +169,7 @@ class ChatBot {
           this.bot.sendMessage(msg.chat.id, `BanList: \n${this.banList.join('\n')}`);
           break;
         case '/ping': {
-          // 读取消息时间，计算延迟并返回
-          const now = Date.now();
-          const messageTime = msg.date * 1000;
-          const delay = now - messageTime;
-          this.bot.sendMessage(msg.chat.id, `pong - ${delay}ms`);
+          this.bot.sendMessage(msg.chat.id, 'pong');
           break;
         }
         case '/dc':
