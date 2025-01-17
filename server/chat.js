@@ -170,7 +170,7 @@ class ChatBot {
    */
   handleCommand(msg) {
     if (msg.from.id === this.myChatId) {
-      const command = msg.text.split(' ')[0];
+      const command = msg.text.split(' ')[0].split('@')[0];
       switch (command) {
         case '/ban':
           this.banUser(msg);
