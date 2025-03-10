@@ -16,7 +16,7 @@
 ```bash
 # 机器人的Token，@BotFather获取
 TELEGRAM_BOT_TOKEN=
-# 自己的userId就是这个ChatId，@userinfobot获取
+# 自己的userId就是这个ChatId，@userinfobot获取；支持设置为群组的chatId，可以在群组中回复消息处理私聊
 MY_CHAT_ID=
 ```
 *UptimeKuma上报经常异常，所以删掉了*  
@@ -36,16 +36,29 @@ MY_CHAT_ID=
 ## Docker Compose 部署
 ```yaml
 services:
+  # 私聊机器人
   hi2ChatBot:
     container_name: hi2-chat-bot
     image: ghcr.io/hi2shark/hi2-chat-bot:latest
     restart: unless-stopped
-    volumes:
-      # 这个目录用来存黑名单列表
-      - ./data:/app/data
     environment:
       # 机器人的Token，@BotFather获取
       - TELEGRAM_BOT_TOKEN=
       # 自己的userId就是这个ChatId，@userinfobot获取
       - MY_CHAT_ID=
+      # MongoDB连接配置
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_NAME=hi2chatbot
+    depends_on:
+      - mongodb
+
+  # MongoDB数据库
+  mongodb:
+    container_name: mongodb
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - ./mongo-data:/data/db
+    ports:
+      - "27017:27017"
 ```
