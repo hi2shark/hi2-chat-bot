@@ -59,6 +59,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./mongo-data:/data/db
-    ports:
-      - "27017:27017"
+    # 如果需要映射端口，请放开注释
+    # ports:
+    #   - "27017:27017"
 ```
