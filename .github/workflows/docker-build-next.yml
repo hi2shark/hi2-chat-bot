@@ -47,7 +47,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t ghcr.io/${{ github.repository }}:$VERSION -f next/Dockerfile .
+        docker build -t ghcr.io/${{ github.repository }}:$VERSION -f Dockerfile .
 
     - name: Log in to GitHub Container Registry
       run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
