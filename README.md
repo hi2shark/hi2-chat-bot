@@ -33,13 +33,13 @@ MY_CHAT_ID=
 | `/ping` | - | 查看机器人是否在线 |
 | `/hello` | 任意 | 只在没有配置MY_CHAT_ID时，可获取当前聊天渠道的ChatId |
 
-## Docker Compose 部署
+## Docker Compose 部署 (Next版本)
 ```yaml
 services:
   # 私聊机器人
   hi2ChatBot:
     container_name: hi2-chat-bot
-    image: ghcr.io/hi2shark/hi2-chat-bot:latest
+    image: ghcr.io/hi2shark/hi2-chat-bot:next
     restart: unless-stopped
     environment:
       # 机器人的Token，@BotFather获取
