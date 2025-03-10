@@ -1,9 +1,9 @@
-const net = require('net');
+import { Socket } from 'net';
 
 async function tcpPing(host, port, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const start = process.hrtime.bigint();
-    const socket = new net.Socket();
+    const socket = new Socket();
 
     socket.setTimeout(timeout);
     socket.on('connect', () => {
@@ -12,7 +12,7 @@ async function tcpPing(host, port, timeout = 10000) {
       const elapsedMs = Number(diff) / 1_000_000;
       resolve(Math.floor(elapsedMs)); // 输出为整数毫秒
     });
-    socket.on('error', err => reject(err));
+    socket.on('error', (err) => reject(err));
     socket.on('timeout', () => {
       socket.destroy();
       reject(new Error('Connection timed out'));
@@ -22,4 +22,4 @@ async function tcpPing(host, port, timeout = 10000) {
   });
 }
 
-module.exports = tcpPing;
+export default tcpPing;
