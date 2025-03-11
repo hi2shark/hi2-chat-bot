@@ -1,7 +1,7 @@
 # TG私聊机器人
 简单自用版，将就用，不保证稳定性  
 因为是无数据库版本，**所以回复别人的消息需要回复带有`From: xxxxxxxxxx`的信息**，且消息不支持二次编辑（所以你编辑了消息，机器人也不会帮你重发。。。。emmmm）  
-** 基于数据库的2.0版本正在测试中，欢迎查看 [dev/2.0](https://github.com/hi2shark/tg-chat-bot/tree/dev/2.0) 分支**  
+**基于数据库的2.0版本正在测试中，欢迎查看 [dev/2.0](https://github.com/hi2shark/hi2-chat-bot/tree/dev/2.0) 分支**  
 
 ## 使用前提
 你得自己创建机器人，获取Token，然后获取自己的ChatId（一定要给机器人发消息，否则启动会报错）  
