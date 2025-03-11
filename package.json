@@ -1,6 +1,6 @@
 {
   "name": "hi2-chat-bot",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "TG私聊机器人",
   "main": "index.mjs",
   "type": "module",
