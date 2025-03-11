@@ -56,6 +56,8 @@ services:
     container_name: hi2-chat-bot
     image: ghcr.io/hi2shark/hi2-chat-bot:next
     restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     environment:
       # 机器人Token
       - TELEGRAM_BOT_TOKEN=
@@ -68,6 +70,7 @@ services:
       # MongoDB连接配置
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_NAME=hi2chatbot
+      - TZ=Asia/Hong_Kong
     depends_on:
       - mongodb
 
@@ -77,7 +80,10 @@ services:
     image: mongo:8
     restart: unless-stopped
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./mongo-data:/data/db
+    environment:
+      - TZ=Asia/Hong_Kong
     # 需要映射端口时取消注释
     # ports:
     #   - "27017:27017"
