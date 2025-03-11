@@ -3,6 +3,7 @@
  */
 
 import models from '../models/index.mjs';
+import UserService from './user.mjs';
 
 class ChatService {
   constructor(bot, myChatId) {
@@ -107,6 +108,10 @@ class ChatService {
     const messageModel = new models.Message();
     // 判断用户消息是否为转发消息
     const isForwardedMessage = message.forward_date;
+
+    // 记录用户信息
+    const userService = new UserService();
+    await userService.updateUserFromMessage(message);
 
     if (isForwardedMessage) {
       // 方法1: 直接转发保留原始转发结构
@@ -427,6 +432,20 @@ class ChatService {
    * @param {Object} message 消息对象
    */
   async forwardMessageEdit(message) {
+    // 判断是否允许编辑
+    const isAllowedEdit = Boolean(process.env.ALLOW_EDIT);
+    if (!isAllowedEdit) {
+      // 机器人告知用户不允许编辑，让他重新发送
+      this.bot.sendMessage(
+        message.chat.id,
+        '抱歉，不允许编辑消息，请重新发送',
+        {
+          reply_to_message_id: message.message_id,
+        },
+      );
+      return;
+    }
+
     // 通过原来消息的chatId，查询消息
     const beforeMessage = await this.queryFirstMessageItemByOriginalMessageId(message.message_id);
     if (!beforeMessage) {

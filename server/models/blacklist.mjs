@@ -7,12 +7,12 @@ class Blacklist extends Base {
 
   /**
    * 根据用户ID查询黑名单
-   * @param {string} userId 用户ID
+   * @param {string} chatId 用户ID
    * @returns {Promise<Object>} 黑名单数据
    */
-  queryByUserId(userId) {
+  queryByChatId(chatId) {
     return this.findOne({
-      userId,
+      chatId,
     });
   }
 
@@ -31,11 +31,11 @@ class Blacklist extends Base {
 
   /**
    * 根据用户ID删除黑名单
-   * @param {string} userId 用户ID
+   * @param {string} chatId 用户ID
    * @returns {Promise<Object>} 删除结果
    */
-  removeByUserId(userId) {
-    return this.remove({ userId });
+  removeByChatId(chatId) {
+    return this.remove({ chatId });
   }
 }
 
