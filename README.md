@@ -54,7 +54,7 @@ services:
   # 私聊机器人
   hi2ChatBot:
     container_name: hi2-chat-bot
-    image: ghcr.io/hi2shark/hi2-chat-bot:next
+    image: ghcr.io/hi2shark/hi2-chat-bot:latest
     restart: unless-stopped
     volumes:
       - /etc/localtime:/etc/localtime:ro
