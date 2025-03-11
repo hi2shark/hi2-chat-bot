@@ -77,6 +77,11 @@ services:
     #   - "27017:27017"
 ```
 
+## 懒人一键安装脚本
+```bash
+wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2chatbot.sh && chmod +x install_hi2chatbot.sh && ./install_hi2chatbot.sh
+```
+
 ## 环境变量
 
 | 变量名 | 说明 | 默认值 |
