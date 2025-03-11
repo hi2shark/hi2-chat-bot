@@ -26,7 +26,10 @@ class ChatService {
     if (!message) {
       return null;
     }
-    return message.chatId;
+    if (type === 'forward') {
+      return message.fromChatId;
+    }
+    return message.replyChatId;
   }
 
   /**
@@ -549,6 +552,35 @@ class ChatService {
         messageId: replyToMessageId,
       });
     });
+  }
+
+  /**
+   * 清除消息历史
+   * @param {number} hours 小时 默认720小时（30天）
+   */
+  async clearMessageHistory(hours = 720) {
+    const messageModel = new models.Message();
+    const now = new Date();
+    const hoursAgo = new Date(now.getTime() - hours * 60 * 60 * 1000);
+    await messageModel.remove({
+      createdAt: {
+        $lt: hoursAgo,
+      },
+    });
+  }
+
+  /**
+   * 自动清除消息历史
+   */
+  autoClearMessageHistory() {
+    const autoClearHours = Number(process.env.MESSAGE_CLEAR_HOURS) || 720;
+    if (autoClearHours !== -1) {
+      this.clearMessageHistory(autoClearHours);
+      // 每分钟执行一次
+      setTimeout(() => {
+        this.autoClearMessageHistory();
+      }, 60 * 1000);
+    }
   }
 }
 

@@ -30,7 +30,10 @@ TELEGRAM_BOT_TOKEN=
 # 自己的userId就是这个ChatId，@userinfobot获取；支持设置为群组的chatId
 MY_CHAT_ID=
 # 是否允许编辑消息，留空默认不允许
-ALLOW_EDIT=false
+ALLOW_EDIT=0
+
+# 自动清除消息关系记录，单位：小时，默认720小时（30天）
+MESSAGE_CLEAR_HOURS=720
 ```
 
 ## 指令列表
@@ -59,7 +62,9 @@ services:
       # 您的ChatId
       - MY_CHAT_ID=
       # 是否允许编辑消息，留空默认不允许
-      - ALLOW_EDIT=false
+      - ALLOW_EDIT=0
+      # 自动清除消息关系记录，单位：小时，默认720小时（30天）
+      - MESSAGE_CLEAR_HOURS=720
       # MongoDB连接配置
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_NAME=hi2chatbot
