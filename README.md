@@ -52,9 +52,9 @@ services:
       # 您的ChatId
       - MY_CHAT_ID=
       # 是否允许编辑消息，0不允许，1允许，如果留空默认不允许
-      - ALLOW_EDIT=0
+      # - ALLOW_EDIT=0
       # 自动清除消息关系记录，单位：小时，默认720小时（30天）
-      - MESSAGE_CLEAR_HOURS=720
+      # - MESSAGE_CLEAR_HOURS=720
       # MongoDB连接配置
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_NAME=hi2chatbot
