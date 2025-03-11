@@ -436,7 +436,7 @@ class ChatService {
    */
   async forwardMessageEdit(message) {
     // 判断是否允许编辑
-    const isAllowedEdit = Boolean(process.env.ALLOW_EDIT);
+    const isAllowedEdit = parseInt(process.env.ALLOW_EDIT, 10) === 1;
     if (!isAllowedEdit) {
       // 机器人告知用户不允许编辑，让他重新发送
       this.bot.sendMessage(
