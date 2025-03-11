@@ -128,7 +128,7 @@ class BotController {
   async hello(msg) {
     this.bot.sendMessage(
       msg.chat.id,
-      `🤖 当前机器人ChatId: <code>${msg.chat.id}</code>`,
+      `🤖 当前聊天窗口的ChatId，点击复制:  \n<code>${msg.chat.id}</code>`,
       {
         parse_mode: 'HTML',
       },
