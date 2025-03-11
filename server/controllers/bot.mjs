@@ -1,12 +1,22 @@
 /**
  * 私聊转发机器人
+ *
+ * - 指令
+ *  - /hello 获取聊天ChatId
+ *  - /ban 拉黑用户
+ *  - /unban 解除拉黑用户
+ *  - /banlist 查看黑名单列表
+ *  - /del 删除消息 通用别名：/d、/remove、/c、/cancel
+ *  - /ping 在线测试
+ *  - /dc 测试Telegram数据中心延迟
+ *  - /stats 获取用户聊天统计信息
  */
 
 import ChatService from '../services/chat.mjs';
 import BlacklistService from '../services/blacklist.mjs';
 import TGDCTcping from '../utils/dc-tcping.mjs';
 
-class ChatController {
+class BotController {
   constructor(bot, myChatId) {
     this.bot = bot;
     this.myChatId = myChatId;
@@ -22,27 +32,28 @@ class ChatController {
    * @param {Object} msg 包含要拉黑用户ID的回复消息
    */
   async ban(msg) {
-    let userId;
+    let chatId;
     let nickname = '';
     let remark = '';
+    const textData = msg.text.split(' ');
     if (msg.reply_to_message?.message_id) {
       const message = await this.chatService.queryMessageItem(msg.reply_to_message.message_id);
-      userId = message?.fromChatId;
+      chatId = message?.fromChatId;
       nickname = message?.nickname;
+      [, remark] = textData || [];
     } else {
-      const textData = msg.text.split(' ');
-      [, userId = '', remark] = textData || [];
-      userId = parseInt(userId, 10);
+      [, chatId = '', remark] = textData || [];
+      chatId = parseInt(chatId, 10);
     }
-    if (userId === this.myChatId) {
+    if (chatId === this.myChatId) {
       this.bot.sendMessage(this.myChatId, '不能拉黑自己');
       return;
     }
-    if (!userId) {
+    if (!chatId) {
       this.bot.sendMessage(this.myChatId, '请输入回复要拉黑的消息ID，或者`/ban 用户ID 备注`');
       return;
     }
-    const result = await this.blacklistService.add(userId, nickname, remark);
+    const result = await this.blacklistService.add(chatId, nickname, remark);
     if (result.success) {
       this.bot.sendMessage(this.myChatId, '拉黑操作成功');
     } else {
@@ -55,20 +66,20 @@ class ChatController {
    * @param {Object} msg 包含要解除黑名单用户ID的回复消息
    */
   async unban(msg) {
-    let userId;
+    let chatId;
     if (msg.reply_to_message?.message_id) {
       const message = await this.chatService.queryMessageItem(msg.reply_to_message.message_id);
-      userId = message?.chatId;
+      chatId = message?.chatId;
     } else {
       const textData = msg.text.split(' ');
-      [, userId = ''] = textData || [];
-      userId = parseInt(userId, 10);
+      [, chatId = ''] = textData || [];
+      chatId = parseInt(chatId, 10);
     }
-    if (!userId) {
+    if (!chatId) {
       this.bot.sendMessage(this.myChatId, '请输入回复要解除拉黑的消息ID，或者`/unban 用户ID`');
       return;
     }
-    const result = await this.blacklistService.remove(userId);
+    const result = await this.blacklistService.remove(chatId);
     if (result.success) {
       this.bot.sendMessage(this.myChatId, '解除拉黑操作成功');
     } else {
@@ -96,7 +107,7 @@ class ChatController {
           minute: '2-digit',
           hour12: false,
         });
-        texts.push(`${index + 1}. <b>用户ID</b>: <code>${item.userId}</code>`);
+        texts.push(`${index + 1}. <b>用户ID</b>: <code>${item.chatId}</code>`);
         if (item.nickname) texts.push(`   <b>昵称</b>: ${item.nickname}`);
         if (item.remark) texts.push(`   <b>备注</b>: ${item.remark}`);
         texts.push(`   <b>时间</b>: ${createdAt}`);
@@ -144,6 +155,9 @@ class ChatController {
           break;
         case '/banlist':
           this.banlist(msg);
+          break;
+        case '/stats':
+          this.handleUserStats(msg);
           break;
         case '/d':
         case '/del':
@@ -203,8 +217,6 @@ class ChatController {
     if (msg.from.id === this.myChatId) {
       if (msg.reply_to_message) {
         await this.chatService.replyMessage(msg);
-      } else {
-        // Feature 未来与机器人做数据交互
       }
     } else {
       await this.chatService.forwardMessage(msg);
@@ -217,8 +229,6 @@ class ChatController {
   async handleGroupMessage(msg) {
     if (msg.reply_to_message) {
       await this.chatService.replyMessage(msg);
-    } else {
-      // Feature 未来与机器人做数据交互
     }
   }
 
@@ -242,6 +252,14 @@ class ChatController {
       return;
     }
     await this.chatService.removeMessage(msg);
+  }
+
+  /**
+   * 获取用户聊天统计信息
+   */
+  async handleUserStats(msg) {
+    const info = await this.userService.stats(msg);
+    this.bot.sendMessage(this.myChatId, info);
   }
 
   /**
@@ -272,10 +290,11 @@ class ChatController {
     this.bot.on('edited_message', (msg) => {
       this.handleEditedMessage(msg);
     });
+
     // 启动成功后通知管理员
     this.bot.sendMessage(this.myChatId, '✨🤖✨🤖✨🤖✨\n ChatBot启动成功');
     this.dcPing();
   }
 }
 
-export default ChatController;
+export default BotController;

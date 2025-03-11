@@ -1,7 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 
 import initDatabase from './db/init.mjs';
-import ChatController from './controllers/chat.mjs';
+import BotController from './controllers/bot.mjs';
 
 function main() {
   initDatabase();
@@ -12,9 +12,9 @@ function main() {
   } = process.env;
   const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-  const chatController = new ChatController(bot, parseInt(MY_CHAT_ID, 10));
+  const botController = new BotController(bot, parseInt(MY_CHAT_ID, 10));
 
-  return chatController;
+  return botController;
 }
 
 export default main;

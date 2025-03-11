@@ -1,39 +1,51 @@
 # TG私聊机器人
-2.0升级为数据库版本，精简机器人消息窗口，增加消息撤回功能；  
+
+## 项目简介
+TG私聊机器人可以将发送给机器人的私聊消息转发给您，并允许您回复这些消息。  
+2.0版本升级为数据库版本，精简了机器人消息窗口，增加了消息撤回和黑名单等功能。
+
+## 主要功能
+- **消息转发**：将私聊消息自动转发给您
+- **消息回复**：可以直接回复转发的消息与用户交流
+- **消息编辑**：支持编辑已发送的消息
+- **消息撤回**：支持撤回已发送的消息
+- **黑名单管理**：可以拉黑和解除拉黑用户
+- **群聊支持**：可以在群组中回复私聊消息
 
 ## 使用须知
- - 机器人只会转发私聊信息给`MY_CHAT_ID`，不会转发群聊信息，所以拉入群聊以后不会转发消息；  
- - 由于接口限制，机器人无法主动监听消息被删除了，如果你需要撤回消息，只能通过对已发送消息执行`/del`指令撤回；  
- - 机器人无法撤回48小时前的消息，使用前请注意；  
- - 机器人无法编辑48小时前的消息，使用前请注意；  
- - 由于媒体类消息的特性，机器人大概率会编辑失败，因此会先删除旧消息，再发送新消息；  
+- 机器人只会转发私聊信息给指定用户，不会转发群聊消息
+- 撤回消息需通过对已发送消息执行`/del`指令
+- 机器人无法撤回或编辑48小时前的消息
+- 媒体类消息编辑可能失败，此时会先删除旧消息再发送新消息
 
-## 使用前提
-你得自己创建机器人，获取Token，然后获取自己的ChatId  
-如果你无法获取，可以只指定`TELEGRAM_BOT_TOKEN`，`MY_CHAT_ID`留空，你发送`/hello`指令，机器人会告诉你当前的ChatId；  
+## 前置准备
+1. 通过[@BotFather](https://t.me/BotFather)创建机器人获取Token
+2. 通过[@userinfobot](https://t.me/userinfobot)获取您的ChatId
+3. 如果无法获取ChatId，可先配置`TELEGRAM_BOT_TOKEN`，然后向机器人发送`/hello`指令获取
 
 ## 环境变量
 ```bash
 # 机器人的Token，@BotFather获取
 TELEGRAM_BOT_TOKEN=
-# 自己的userId就是这个ChatId，@userinfobot获取；支持设置为群组的chatId，可以在群组中回复消息处理私聊
+# 自己的userId就是这个ChatId，@userinfobot获取；支持设置为群组的chatId
 MY_CHAT_ID=
+# 是否允许编辑消息，留空默认不允许
+ALLOW_EDIT=false
 ```
-*UptimeKuma上报经常异常，所以删掉了*  
 
+## 指令列表
+| 指令 | 使用方式 | 说明 |
+|------|---------|------|
+| `/ban` | 回复/直接发送 | 拉黑用户：回复消息使用`/ban`或直接发送`/ban {userId} {备注}` |
+| `/unban` | 回复/直接发送 | 解除拉黑：回复消息使用`/unban`或直接发送`/unban {userId}` |
+| `/banlist` | 直接发送 | 查看当前黑名单列表 |
+| `/del` | 回复 | 撤回消息，别名：`/d`、`/c`、`/cancel`、`/remove` |
+| `/ping` | 直接发送 | 检测机器人是否在线 |
+| `/dc` | 直接发送 | 检测与Telegram服务器的连接延迟 |
+| `/stats` | 直接发送 | 获取用户聊天统计信息 |
+| `/hello` | 直接发送 | 获取当前聊天的ChatId（未配置MY_CHAT_ID时可用） |
 
-## 目前支持的指令
-| 指令    | 范围    | 说明   | 
-| ------  | ------  | ------ |
-| `/ban` | 回复/带命令 | 对消息回复`/ban`，即可拉黑这个私聊用户，机器人不再转发他的消息；`/ban {remark}`，拉黑并备注 |
-| `/unban` | 回复/带命令 | 发送`/unban {userId}`，即可解除拉黑状态 |
-| `/del` | 回复 | 对消息回复`/del`，即可撤回消息，`/d`，`/c`，`/cancel`，`/remove`可以通用 |
-| `/banlist` | - | 查看拉黑列表，只记录的userid、nickname、remark、时间 |
-| `/dc` | - | 机器人与Telegram服务器的Tcping值，参考值 |
-| `/ping` | - | 查看机器人是否在线 |
-| `/hello` | 任意 | 只在没有配置MY_CHAT_ID时，可获取当前聊天渠道的ChatId |
-
-## Docker Compose 部署 (Next版本)
+## Docker部署
 ```yaml
 services:
   # 私聊机器人
@@ -42,10 +54,12 @@ services:
     image: ghcr.io/hi2shark/hi2-chat-bot:next
     restart: unless-stopped
     environment:
-      # 机器人的Token，@BotFather获取
+      # 机器人Token
       - TELEGRAM_BOT_TOKEN=
-      # 自己的userId就是这个ChatId，@userinfobot获取
+      # 您的ChatId
       - MY_CHAT_ID=
+      # 是否允许编辑消息，留空默认不允许
+      - ALLOW_EDIT=false
       # MongoDB连接配置
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_NAME=hi2chatbot
@@ -59,7 +73,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./mongo-data:/data/db
-    # 如果需要映射端口，请放开注释
+    # 需要映射端口时取消注释
     # ports:
     #   - "27017:27017"
 ```
