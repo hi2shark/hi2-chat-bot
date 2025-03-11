@@ -43,7 +43,15 @@ class User extends Base {
     if (!user) {
       throw new Error('User not found');
     }
-    await this.update({ userId }, { $inc: { msgCount: 1 } });
+    const { collection } = await this.connect();
+    const safeWhere = this.handleWhere({ userId });
+    return collection.updateOne(
+      safeWhere,
+      {
+        $inc: { msgCount: 1 },
+        $set: { updatedAt: new Date() },
+      },
+    );
   }
 }
 

@@ -12,8 +12,11 @@
  *  - /stats 获取用户聊天统计信息
  */
 
+import dayjs from 'dayjs';
+
 import ChatService from '../services/chat.mjs';
 import BlacklistService from '../services/blacklist.mjs';
+import UserService from '../services/user.mjs';
 import TGDCTcping from '../utils/dc-tcping.mjs';
 
 class BotController {
@@ -23,6 +26,7 @@ class BotController {
 
     this.chatService = new ChatService(this.bot, this.myChatId);
     this.blacklistService = new BlacklistService();
+    this.userService = new UserService();
 
     this.start();
   }
@@ -99,14 +103,7 @@ class BotController {
       }
       const texts = ['📋 <b>黑名单列表</b>\n'];
       result.data.forEach((item, index) => {
-        const createdAt = new Date(item.createdAt).toLocaleString('zh-CN', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        });
+        const createdAt = dayjs(item.createdAt).format('YYYY-MM-DD HH:mm');
         texts.push(`${index + 1}. <b>用户ID</b>: <code>${item.chatId}</code>`);
         if (item.nickname) texts.push(`   <b>昵称</b>: ${item.nickname}`);
         if (item.remark) texts.push(`   <b>备注</b>: ${item.remark}`);
@@ -292,8 +289,13 @@ class BotController {
     });
 
     // 启动成功后通知管理员
-    this.bot.sendMessage(this.myChatId, '✨🤖✨🤖✨🤖✨\n ChatBot启动成功');
+    this.bot.sendMessage(
+      this.myChatId,
+      `✨🤖✨🤖✨🤖✨\n ChatBot启动成功\n当前时间：${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
+    );
     this.dcPing();
+    // 自动清除消息历史
+    this.chatService.autoClearMessageHistory();
   }
 }
 
