@@ -288,12 +288,14 @@ class BotController {
       this.handleEditedMessage(msg);
     });
 
-    // 启动成功后通知管理员
-    this.bot.sendMessage(
-      this.myChatId,
-      `✨🤖✨🤖✨🤖✨\n ChatBot启动成功\n当前时间：${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
-    );
-    this.dcPing();
+    if (process.env.HIDE_START_MESSAGE !== '1') {
+      // 启动成功后通知管理员
+      this.bot.sendMessage(
+        this.myChatId,
+        `✨🤖✨🤖✨🤖✨\n ChatBot启动成功\n当前时间：${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
+      );
+      this.dcPing();
+    }
     // 自动清除消息历史
     this.chatService.autoClearMessageHistory();
   }
