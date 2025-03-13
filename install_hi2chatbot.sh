@@ -214,6 +214,27 @@ check_service_status() {
   fi
 }
 
+# 检查并更新镜像
+check_and_update_images() {
+  PROJECT_DIR="$HOME/hi2-chat-bot"
+  
+  if [ -d "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/docker-compose.yml" ]; then
+    cd "$PROJECT_DIR"
+    
+    print_message "正在检查镜像更新..."
+    if docker compose pull; then
+      print_success "镜像更新成功！"
+      return 0
+    else
+      print_warning "镜像更新失败，将使用当前镜像。"
+      return 1
+    fi
+  else
+    print_warning "项目目录或配置文件不存在，无法更新镜像。"
+    return 2
+  fi
+}
+
 # 启动或重启服务
 manage_service() {
   PROJECT_DIR="$HOME/hi2-chat-bot"
@@ -224,12 +245,21 @@ manage_service() {
   if [ $STATUS -eq 0 ]; then
     # 服务正在运行
     print_message "TG私聊机器人服务已在运行。"
-    print_message "是否要重启服务? (y/n):"
+    print_message "是否要检查更新并重启服务? (y/n):"
     read -p "> " RESTART_SERVICE
     
     if [[ "$RESTART_SERVICE" == "y" || "$RESTART_SERVICE" == "Y" ]]; then
-      print_message "正在重启服务..."
-      cd "$PROJECT_DIR" && docker compose restart
+      # 检查并更新镜像
+      check_and_update_images
+      UPDATE_STATUS=$?
+      
+      if [ $UPDATE_STATUS -eq 0 ]; then
+        print_message "检测到镜像更新，正在重启服务..."
+        cd "$PROJECT_DIR" && docker compose up -d
+      else
+        print_message "正在重启服务..."
+        cd "$PROJECT_DIR" && docker compose restart
+      fi
       
       if [ $? -eq 0 ]; then
         print_success "服务重启成功！"
@@ -242,10 +272,13 @@ manage_service() {
   elif [ $STATUS -eq 1 ]; then
     # 服务未运行但已安装
     print_message "TG私聊机器人服务已安装但未运行。"
-    print_message "是否要启动服务? (y/n):"
+    print_message "是否要检查更新并启动服务? (y/n):"
     read -p "> " START_SERVICE
     
     if [[ "$START_SERVICE" == "y" || "$START_SERVICE" == "Y" ]]; then
+      # 检查并更新镜像
+      check_and_update_images
+      
       print_message "正在启动服务..."
       cd "$PROJECT_DIR" && docker compose up -d
       
@@ -293,6 +326,7 @@ manage_service() {
   echo "  - 查看日志: cd $PROJECT_DIR && docker compose logs -f"
   echo "  - 停止服务: cd $PROJECT_DIR && docker compose down"
   echo "  - 重启服务: cd $PROJECT_DIR && docker compose restart"
+  echo "  - 更新镜像: cd $PROJECT_DIR && docker compose pull"
 }
 
 # 主函数
