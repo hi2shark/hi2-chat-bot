@@ -55,6 +55,8 @@ services:
       # - ALLOW_EDIT=0
       # 自动清除消息关系记录，单位：小时，默认720小时（30天）
       # - MESSAGE_CLEAR_HOURS=720
+      # 隐藏启动消息，填入1隐藏，留空或者不为1则不隐藏
+      # - HIDE_START_MESSAGE=1
       # MongoDB连接配置
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_NAME=hi2chatbot
@@ -90,6 +92,7 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 | `MY_CHAT_ID` | 您的用户ID，从@userinfobot获取；也支持设置为群组的chatId | 无，必填 |
 | `ALLOW_EDIT` | 是否允许编辑消息 | `0`（不允许） |
 | `MESSAGE_CLEAR_HOURS` | 自动清除消息关系记录的时间，单位：小时 | `720`（30天） |
+| `HIDE_START_MESSAGE` | 隐藏启动消息，填入1隐藏，留空或者不为1则不隐藏 | 留空 |
 | `MONGODB_URL` | MongoDB连接地址 | `mongodb://mongodb:27017` |
 | `MONGODB_NAME` | MongoDB数据库名称 | `hi2chatbot` |
 | `TZ` | 时区设置 | `Asia/Hong_Kong` |
