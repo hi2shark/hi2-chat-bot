@@ -2,7 +2,8 @@
 
 ## 项目简介
 TG私聊机器人可以将发送给机器人的私聊消息转发给您，并允许您回复这些消息。  
-2.0版本升级为数据库版本，精简了机器人消息窗口，增加了消息撤回和黑名单等功能。
+2.0版本升级为数据库版本，精简了机器人消息窗口，增加了消息撤回和黑名单等功能。  
+支持Uptime Kuma健康状态上报，每30秒上报一次，建议健康监听范围值180秒。  
 
 ## 主要功能
 - **消息转发**：将私聊消息自动转发给您/或者群组内
@@ -95,4 +96,5 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 | `HIDE_START_MESSAGE` | 隐藏启动消息，填入1隐藏，留空或者不为1则不隐藏 | 留空 |
 | `MONGODB_URL` | MongoDB连接地址 | `mongodb://mongodb:27017` |
 | `MONGODB_NAME` | MongoDB数据库名称 | `hi2chatbot` |
+| `UPTIME_KUMA_PUSH_URL` | Uptime Kuma推送URL | - |
 | `TZ` | 时区设置 | `Asia/Hong_Kong` |
