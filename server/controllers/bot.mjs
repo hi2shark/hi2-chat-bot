@@ -10,6 +10,7 @@
  *  - /ping 在线测试
  *  - /dc 测试Telegram数据中心延迟
  *  - /stats 获取用户聊天统计信息
+ *  - /status 获取机器人系统状态
  */
 
 import dayjs from 'dayjs';
@@ -20,9 +21,10 @@ import UserService from '../services/user.mjs';
 import TGDCTcping from '../utils/dc-tcping.mjs';
 
 class BotController {
-  constructor(bot, myChatId) {
+  constructor(bot, myChatId, processMonitor = null) {
     this.bot = bot;
     this.myChatId = myChatId;
+    this.processMonitor = processMonitor;
 
     this.chatService = new ChatService(this.bot, this.myChatId);
     this.blacklistService = new BlacklistService();
@@ -140,35 +142,38 @@ class BotController {
    * @param {Object} msg Telegram消息对象
    * @description 仅机器人管理员可执行 /ban 和 /unban 命令
    */
-  handleCommand(msg) {
+  async handleCommand(msg) {
     const command = msg.text.split(' ')[0].split('@')[0];
     if (msg.chat.id === this.myChatId) {
       switch (command) {
         case '/ban':
-          this.ban(msg);
+          await this.ban(msg);
           break;
         case '/unban':
-          this.unban(msg);
+          await this.unban(msg);
           break;
         case '/banlist':
-          this.banlist(msg);
+          await this.banlist(msg);
           break;
         case '/stats':
-          this.handleUserStats(msg);
+          await this.handleUserStats(msg);
+          break;
+        case '/status':
+          await this.handleSystemStatus(msg);
           break;
         case '/d':
         case '/del':
         case '/remove':
         case '/c':
         case '/cancel':
-          this.handleRemoveMessage(msg);
+          await this.handleRemoveMessage(msg);
           break;
         case '/ping': {
-          this.bot.sendMessage(msg.chat.id, 'pong');
+          await this.bot.sendMessage(msg.chat.id, 'pong');
           break;
         }
         case '/dc': {
-          this.dcPing(msg);
+          await this.dcPing(msg);
           break;
         }
         default:
@@ -177,7 +182,7 @@ class BotController {
     }
     if (!this.myChatId && command === '/hello') {
       // 如果机器人没有设置 myChatId，通过/hello 获取 myChatId
-      this.hello(msg);
+      await this.hello(msg);
     }
   }
 
@@ -260,32 +265,88 @@ class BotController {
   }
 
   /**
+   * 获取系统状态信息
+   */
+  async handleSystemStatus(msg) {
+    try {
+      if (this.processMonitor) {
+        const statusReport = this.processMonitor.formatStatusReport();
+        await this.bot.sendMessage(this.myChatId, statusReport, { parse_mode: 'HTML' });
+      } else {
+        // 如果没有进程监控器，显示基本信息
+        const usage = process.memoryUsage();
+        const uptime = process.uptime();
+
+        const formatUptime = (seconds) => {
+          const hours = Math.floor(seconds / 3600);
+          const minutes = Math.floor((seconds % 3600) / 60);
+          const secs = Math.floor(seconds % 60);
+          return `${hours}h ${minutes}m ${secs}s`;
+        };
+
+        const basicStatus = `📊 系统状态
+🕐 运行时间: ${formatUptime(uptime)}
+💾 内存使用:
+  • RSS: ${Math.round(usage.rss / 1024 / 1024)} MB
+  • 堆内存: ${Math.round(usage.heapUsed / 1024 / 1024)} MB
+  • 外部内存: ${Math.round(usage.external / 1024 / 1024)} MB
+🖥️ 系统信息:
+  • Node.js: ${process.version}
+  • 平台: ${process.platform}
+  • 进程ID: ${process.pid}`;
+
+        await this.bot.sendMessage(this.myChatId, basicStatus);
+      }
+    } catch (error) {
+      console.error('获取系统状态失败:', error);
+      await this.bot.sendMessage(this.myChatId, '❌ 获取系统状态失败');
+    }
+  }
+
+  /**
+   * 错误处理包装器
+   * @param {Function} handler 事件处理函数
+   * @param {string} eventName 事件名称
+   * @returns {Function} 包装后的处理函数
+   */
+  wrapWithErrorHandler(handler, eventName) {
+    return async (...args) => {
+      try {
+        await handler.apply(this, args);
+      } catch (error) {
+        console.error(`${eventName} 处理失败:`, error);
+
+        // 尝试通知管理员错误信息
+        try {
+          if (this.myChatId) {
+            await this.bot.sendMessage(
+              this.myChatId,
+              `⚠️ 系统错误: ${eventName} 处理失败\n错误: ${error.message}\n时间: ${new Date().toISOString()}`,
+            );
+          }
+        } catch (notifyError) {
+          console.error('发送错误通知失败:', notifyError);
+        }
+      }
+    };
+  }
+
+  /**
    * 初始化消息处理器
    * @description 注册消息事件监听，分发命令和私聊消息
    */
   start() {
-    this.bot.on('message', (msg) => {
-      if (msg.text && msg.text.startsWith('/')) {
-        this.handleCommand(msg);
-        return;
-      }
+    // 使用错误处理包装器包装所有事件处理器
+    this.bot.on('message', this.wrapWithErrorHandler(this.handleMessage, 'message'));
+    this.bot.on('edited_message', this.wrapWithErrorHandler(this.handleEditedMessage, 'edited_message'));
 
-      if (msg.chat.type === 'private') {
-        this.handlePrivateMessage(msg);
-      } else
-      if (
-        ['group', 'supergroup'].includes(msg.chat.type)
-        && msg.chat.id === this.myChatId
-        && msg.reply_to_message?.message_id
-      ) {
-        // 在群聊中回复私聊消息（皮套人分身？
-        this.handleGroupMessage(msg);
-      }
+    // 添加全局错误处理
+    this.bot.on('error', (error) => {
+      console.error('Telegram Bot 错误:', error);
     });
 
-    // 处理编辑消息
-    this.bot.on('edited_message', (msg) => {
-      this.handleEditedMessage(msg);
+    this.bot.on('polling_error', (error) => {
+      console.error('Telegram Bot Polling 错误:', error);
     });
 
     if (process.env.HIDE_START_MESSAGE !== '1') {
@@ -293,11 +354,58 @@ class BotController {
       this.bot.sendMessage(
         this.myChatId,
         `✨🤖✨🤖✨🤖✨\n ChatBot启动成功\n当前时间：${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
-      );
+      ).catch((error) => {
+        console.error('发送启动消息失败:', error);
+      });
       this.dcPing();
     }
     // 自动清除消息历史
     this.chatService.autoClearMessageHistory();
+  }
+
+  /**
+   * 统一的消息处理入口
+   * @param {Object} msg Telegram消息对象
+   */
+  async handleMessage(msg) {
+    if (msg.text && msg.text.startsWith('/')) {
+      await this.handleCommand(msg);
+      return;
+    }
+
+    if (msg.chat.type === 'private') {
+      await this.handlePrivateMessage(msg);
+    } else if (
+      ['group', 'supergroup'].includes(msg.chat.type)
+      && msg.chat.id === this.myChatId
+      && msg.reply_to_message?.message_id
+    ) {
+      // 在群聊中回复私聊消息
+      await this.handleGroupMessage(msg);
+    }
+  }
+
+  /**
+   * 清理资源
+   */
+  cleanup() {
+    // 清理Bot事件监听器
+    if (this.bot) {
+      this.bot.removeAllListeners('message');
+      this.bot.removeAllListeners('edited_message');
+      this.bot.removeAllListeners('error');
+      this.bot.removeAllListeners('polling_error');
+    }
+
+    // 停止消息历史清理定时器
+    if (this.chatService) {
+      this.chatService.stopAutoClearMessageHistory();
+    }
+
+    // 停止进程监控器
+    if (this.processMonitor) {
+      this.processMonitor.stop();
+    }
   }
 }
 

@@ -4,6 +4,9 @@
 
 import tcpPing from './tcping.mjs';
 
+// 全局变量管理定时器
+let reportingInterval = null;
+
 /**
  * 处理带有ping参数的URL
  * @param {string} url 原始URL
@@ -44,10 +47,12 @@ async function processPingUrl(url) {
 
 /**
  * 发送健康状态到Uptime Kuma
+ * @param {number} retryCount 当前重试次数
  * @returns {Promise<void>}
  */
-async function reportStatus() {
+async function reportStatus(retryCount = 0) {
   const uptimeKumaUrl = process.env.UPTIME_KUMA_PUSH_URL;
+  const maxRetries = 3;
 
   if (!uptimeKumaUrl) {
     return;
@@ -57,12 +62,39 @@ async function reportStatus() {
     // 处理URL中的ping参数
     const processedUrl = await processPingUrl(uptimeKumaUrl);
 
-    const response = await fetch(processedUrl);
+    // 设置请求超时
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+
+    const response = await fetch(processedUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Hi2-Chat-Bot/2.0.7',
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
     const result = await response.text();
     console.log(`上报状态成功: ${result}`);
   } catch (error) {
-    // 忽略网络错误，避免程序崩溃
-    console.error('上报状态失败，已忽略错误:', error.message);
+    const errorMessage = error.name === 'AbortError' ? '请求超时' : error.message;
+    console.error(`上报状态失败 (尝试 ${retryCount + 1}/${maxRetries + 1}): ${errorMessage}`);
+
+    // 实现指数退避重试
+    if (retryCount < maxRetries) {
+      const delay = (2 ** retryCount) * 1000 + Math.random() * 1000; // 1-2秒, 2-4秒, 4-8秒
+      console.log(`${delay}ms 后重试...`);
+      setTimeout(() => {
+        reportStatus(retryCount + 1);
+      }, delay);
+    } else {
+      console.error('上报状态最终失败，已达到最大重试次数');
+    }
   }
 }
 
@@ -71,13 +103,29 @@ async function reportStatus() {
  * 每30秒上报一次
  */
 export function startUptimeReporting() {
+  // 如果已经存在定时器，先清理
+  if (reportingInterval) {
+    clearInterval(reportingInterval);
+    reportingInterval = null;
+  }
+
   // 启动时立即上报一次
   reportStatus();
 
   // 设置定时任务，每30秒上报一次
-  const intervalId = setInterval(reportStatus, 30000);
+  reportingInterval = setInterval(reportStatus, 30000);
 
-  return intervalId;
+  return reportingInterval;
+}
+
+/**
+ * 停止健康状态上报
+ */
+export function stopUptimeReporting() {
+  if (reportingInterval) {
+    clearInterval(reportingInterval);
+    reportingInterval = null;
+  }
 }
 
 export default startUptimeReporting;

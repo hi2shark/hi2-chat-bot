@@ -9,6 +9,7 @@ class ChatService {
   constructor(bot, myChatId) {
     this.bot = bot;
     this.myChatId = myChatId;
+    this.clearHistoryTimer = null; // 添加定时器管理
   }
 
   /**
@@ -539,11 +540,29 @@ class ChatService {
   autoClearMessageHistory() {
     const autoClearHours = Number(process.env.MESSAGE_CLEAR_HOURS) || 720;
     if (autoClearHours !== -1) {
+      // 如果已经存在定时器，先清理
+      if (this.clearHistoryTimer) {
+        clearInterval(this.clearHistoryTimer);
+        this.clearHistoryTimer = null;
+      }
+
+      // 立即执行一次清理
       this.clearMessageHistory(autoClearHours);
-      // 每分钟执行一次
-      setTimeout(() => {
-        this.autoClearMessageHistory();
+
+      // 使用setInterval替代递归setTimeout
+      this.clearHistoryTimer = setInterval(() => {
+        this.clearMessageHistory(autoClearHours);
       }, 60 * 1000);
+    }
+  }
+
+  /**
+   * 停止自动清除消息历史
+   */
+  stopAutoClearMessageHistory() {
+    if (this.clearHistoryTimer) {
+      clearInterval(this.clearHistoryTimer);
+      this.clearHistoryTimer = null;
     }
   }
 }

@@ -39,18 +39,23 @@ class User extends Base {
    * @param {string} userId 用户ID
    */
   async incrementMsgCount(userId) {
-    const user = await this.findOne({ userId });
-    if (!user) {
-      throw new Error('User not found');
-    }
-    const { collection } = await this.connect();
-    const safeWhere = this.handleWhere({ userId });
-    return collection.updateOne(
-      safeWhere,
-      {
-        $inc: { msgCount: 1 },
-        $set: { updatedAt: new Date() },
+    return this.executeWithRetry(
+      async (collection) => {
+        const user = await collection.findOne({ userId });
+        if (!user) {
+          throw new Error('User not found');
+        }
+        
+        const safeWhere = this.handleWhere({ userId });
+        return await collection.updateOne(
+          safeWhere,
+          {
+            $inc: { msgCount: 1 },
+            $set: { updatedAt: new Date() },
+          }
+        );
       },
+      'increment message count'
     );
   }
 }
