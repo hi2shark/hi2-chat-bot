@@ -111,32 +111,110 @@ class BotController {
 
   /**
    * 获取黑名单列表
+   * @param {number} page 页码（从1开始）
+   * @param {number} messageId 要编辑的消息ID（用于翻页时更新消息）
    */
-  async banlist() {
+  async banlist(page = 1, messageId = null) {
     const result = await this.blacklistService.list();
     if (result.success) {
       if (result.data.length === 0) {
-        this.bot.sendMessage(this.myChatId, '📋 <b>黑名单列表为空</b>', { parse_mode: 'HTML' });
+        const emptyMessage = '📋 <b>黑名单列表为空</b>';
+        if (messageId) {
+          await this.bot.editMessageText(emptyMessage, {
+            chat_id: this.myChatId,
+            message_id: messageId,
+            parse_mode: 'HTML',
+          });
+        } else {
+          this.bot.sendMessage(this.myChatId, emptyMessage, { parse_mode: 'HTML' });
+        }
         return;
       }
-      const texts = ['📋 <b>黑名单列表</b>\n'];
-      result.data.forEach((item, index) => {
+
+      // 分页配置
+      const pageSize = 5; // 每页显示5条
+      const totalItems = result.data.length;
+      const totalPages = Math.ceil(totalItems / pageSize);
+      const currentPage = Math.max(1, Math.min(page, totalPages)); // 确保页码有效
+
+      // 计算当前页的数据范围
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = Math.min(startIndex + pageSize, totalItems);
+      const pageData = result.data.slice(startIndex, endIndex);
+
+      // 构建消息文本
+      const texts = [`📋 <b>黑名单列表</b> (第 ${currentPage}/${totalPages} 页)\n`];
+      pageData.forEach((item, index) => {
+        const globalIndex = startIndex + index + 1; // 全局索引
         const createdAt = dayjs(item.createdAt).format('YYYY-MM-DD HH:mm');
-        texts.push(`${index + 1}. <b>用户ID</b>: <code>${item.chatId}</code>`);
+        texts.push(`${globalIndex}. <b>用户ID</b>: <code>${item.chatId}</code>`);
         if (item.nickname) texts.push(`   <b>昵称</b>: ${item.nickname}`);
         if (item.remark) texts.push(`   <b>备注</b>: ${item.remark}`);
         texts.push(`   <b>时间</b>: ${createdAt}`);
         texts.push(''); // 添加空行分隔不同用户
       });
-      this.bot.sendMessage(
-        this.myChatId,
-        texts.join('\n'),
-        {
-          parse_mode: 'HTML',
-        },
-      );
+
+      // 构建翻页按钮
+      const keyboard = [];
+      const buttonRow = [];
+
+      if (totalPages > 1) {
+        // 上一页按钮
+        if (currentPage > 1) {
+          buttonRow.push({
+            text: '⬅️ 上一页',
+            callback_data: `banlist:${currentPage - 1}`,
+          });
+        }
+
+        // 页码显示
+        buttonRow.push({
+          text: `${currentPage}/${totalPages}`,
+          callback_data: 'banlist:current',
+        });
+
+        // 下一页按钮
+        if (currentPage < totalPages) {
+          buttonRow.push({
+            text: '下一页 ➡️',
+            callback_data: `banlist:${currentPage + 1}`,
+          });
+        }
+
+        keyboard.push(buttonRow);
+      }
+
+      // 添加刷新按钮
+      keyboard.push([{
+        text: '🔄 刷新',
+        callback_data: `banlist:${currentPage}`,
+      }]);
+
+      const messageOptions = {
+        parse_mode: 'HTML',
+        reply_markup: keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined,
+      };
+
+      // 发送或更新消息
+      if (messageId) {
+        await this.bot.editMessageText(texts.join('\n'), {
+          chat_id: this.myChatId,
+          message_id: messageId,
+          ...messageOptions,
+        });
+      } else {
+        await this.bot.sendMessage(this.myChatId, texts.join('\n'), messageOptions);
+      }
     } else {
-      this.bot.sendMessage(this.myChatId, `❌ 获取黑名单列表失败: ${result.message}`);
+      const errorMessage = `❌ 获取黑名单列表失败: ${result.message}`;
+      if (messageId) {
+        await this.bot.editMessageText(errorMessage, {
+          chat_id: this.myChatId,
+          message_id: messageId,
+        });
+      } else {
+        this.bot.sendMessage(this.myChatId, errorMessage);
+      }
     }
   }
 
@@ -325,7 +403,7 @@ ${result.reason}${actionText}
   - 回复用户消息后发送 <code>/unban</code>
   - 或直接发送 <code>/unban {userId}</code>
 
-• <code>/banlist</code> - 查看黑名单列表
+• <code>/banlist</code> - 查看黑名单列表（支持翻页）
 
 <b>🤖 AI审核管理</b>
 • <code>/initaudit</code> - 初始化用户审核状态
@@ -375,7 +453,7 @@ ${result.reason}${actionText}
           await this.unban(msg);
           break;
         case '/banlist':
-          await this.banlist(msg);
+          await this.banlist();
           break;
         case '/init':
         case '/initaudit':
@@ -742,6 +820,74 @@ ${result.reason}${actionText}
   }
 
   /**
+   * 处理回调查询（用于翻页按钮等）
+   * @param {Object} callbackQuery 回调查询对象
+   */
+  async handleCallbackQuery(callbackQuery) {
+    const { data, message } = callbackQuery;
+    const userId = callbackQuery.from.id;
+
+    // 只允许机器人所有者使用
+    if (userId !== this.myChatId) {
+      await this.bot.answerCallbackQuery(callbackQuery.id, {
+        text: '⚠️ 您没有权限执行此操作',
+        show_alert: true,
+      });
+      return;
+    }
+
+    try {
+      // 解析回调数据
+      const [action, ...params] = data.split(':');
+
+      switch (action) {
+        case 'banlist': {
+          // 解析页码
+          let page = 1;
+          if (params[0] === 'current') {
+            // 从消息文本中提取当前页码
+            const match = message?.text?.match(/第 (\d+)\//);
+            page = match ? parseInt(match[1], 10) : 1;
+          } else {
+            // 从回调数据中获取页码
+            page = parseInt(params[0], 10) || 1;
+          }
+          
+          // 确保页码有效
+          page = Math.max(1, page);
+          
+          // 如果点击的是当前页码按钮，不做任何操作
+          if (params[0] === 'current') {
+            await this.bot.answerCallbackQuery(callbackQuery.id, {
+              text: `当前是第 ${page} 页`,
+            });
+            return;
+          }
+
+          // 更新黑名单列表
+          await this.banlist(page, message.message_id);
+
+          // 回应回调查询
+          await this.bot.answerCallbackQuery(callbackQuery.id, {
+            text: `已切换到第 ${page} 页`,
+          });
+          break;
+        }
+        default:
+          await this.bot.answerCallbackQuery(callbackQuery.id, {
+            text: '未知的操作',
+          });
+      }
+    } catch (error) {
+      logger.error('处理回调查询失败:', error);
+      await this.bot.answerCallbackQuery(callbackQuery.id, {
+        text: '❌ 操作失败，请重试',
+        show_alert: true,
+      });
+    }
+  }
+
+  /**
    * 错误处理包装器
    * @param {Function} handler 事件处理函数
    * @param {string} eventName 事件名称
@@ -777,6 +923,7 @@ ${result.reason}${actionText}
     // 使用错误处理包装器包装所有事件处理器
     this.bot.on('message', this.wrapWithErrorHandler(this.handleMessage, 'message'));
     this.bot.on('edited_message', this.wrapWithErrorHandler(this.handleEditedMessage, 'edited_message'));
+    this.bot.on('callback_query', this.wrapWithErrorHandler(this.handleCallbackQuery, 'callback_query'));
 
     // 添加全局错误处理
     this.bot.on('error', (error) => {
@@ -831,6 +978,7 @@ ${result.reason}${actionText}
     if (this.bot) {
       this.bot.removeAllListeners('message');
       this.bot.removeAllListeners('edited_message');
+      this.bot.removeAllListeners('callback_query');
       this.bot.removeAllListeners('error');
       this.bot.removeAllListeners('polling_error');
     }
