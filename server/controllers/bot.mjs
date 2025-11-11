@@ -6,10 +6,13 @@
  *  - /ban 拉黑用户
  *  - /unban 解除拉黑用户
  *  - /banlist 查看黑名单列表
+ *  - /initaudit 初始化用户审核状态
+ *  - /test 测试AI审核功能
  *  - /del 删除消息 通用别名：/d、/remove、/c、/cancel
  *  - /ping 在线测试
  *  - /dc 测试Telegram数据中心延迟
  *  - /stats 获取用户聊天统计信息
+ *  - /info 获取消息详细信息
  *  - /status 获取机器人系统状态
  */
 
@@ -138,6 +141,89 @@ class BotController {
   }
 
   /**
+   * 测试AI审核功能
+   * @param {Object} msg 消息对象
+   */
+  async testAudit(msg) {
+    // 检查AI审核是否启用
+    if (!this.auditService.isEnabled()) {
+      this.bot.sendMessage(
+        this.myChatId,
+        '❌ AI审核功能未启用\n请在环境变量中设置 AI_AUDIT_ENABLED=1 并配置 OPENAI_API_KEY',
+      );
+      return;
+    }
+
+    // 提取测试文本
+    const textData = msg.text.split(' ');
+    const testText = textData.slice(1).join(' ').trim();
+
+    if (!testText || testText.length === 0) {
+      this.bot.sendMessage(
+        this.myChatId,
+        '❌ 请提供要测试的文本\n\n使用方法：<code>/test {测试文本}</code>\n\n示例：\n• <code>/test 我是正常用户想咨询问题</code>\n• <code>/test 加微信xxx，专业代办各种证件</code>',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    // 发送处理中的提示
+    const processingMsg = await this.bot.sendMessage(
+      this.myChatId,
+      '🤖 正在使用AI检测...',
+    );
+
+    try {
+      // 调用AI审核
+      const startTime = Date.now();
+      const result = await this.auditService.checkAdvertisement(testText);
+      const elapsedTime = Date.now() - startTime;
+
+      // 构建结果消息
+      const statusIcon = result.isAdvertisement ? '🚫' : '✅';
+      const statusText = result.isAdvertisement ? '<b>检测到广告/违规内容</b>' : '<b>正常内容</b>';
+      const actionText = result.isAdvertisement
+        ? '\n\n⚠️ <b>处理动作</b>: 如果是新用户发送此类内容，将被自动拉黑'
+        : '\n\n✅ <b>处理动作</b>: 内容正常，可以转发';
+
+      const resultText = `${statusIcon} <b>AI审核测试结果</b>
+
+<b>📝 测试文本</b>
+<code>${testText.length > 200 ? testText.substring(0, 200) + '...' : testText}</code>
+
+<b>🎯 判定结果</b>
+${statusText}
+
+<b>💭 判定理由</b>
+${result.reason}${actionText}
+
+<b>⏱️ 耗时</b>: ${elapsedTime}ms
+<b>🤖 模型</b>: ${this.auditService.model}`;
+
+      // 更新消息显示结果
+      await this.bot.editMessageText(resultText, {
+        chat_id: this.myChatId,
+        message_id: processingMsg.message_id,
+        parse_mode: 'HTML',
+      });
+
+      logger.log(`🧪 AI审核测试: ${result.isAdvertisement ? '广告' : '正常'} | 耗时: ${elapsedTime}ms`);
+    } catch (error) {
+      logger.error('AI审核测试失败:', error);
+
+      // 更新消息显示错误
+      await this.bot.editMessageText(
+        `❌ <b>AI审核测试失败</b>\n\n<b>错误信息</b>: ${error.message}\n\n请检查：\n• OpenAI API配置是否正确\n• API Key是否有效\n• 网络连接是否正常`,
+        {
+          chat_id: this.myChatId,
+          message_id: processingMsg.message_id,
+          parse_mode: 'HTML',
+        },
+      );
+    }
+  }
+
+  /**
    * 初始化用户审核状态
    * @param {Object} msg 消息对象
    */
@@ -248,6 +334,10 @@ class BotController {
   - 或直接发送 <code>/initaudit {userId}</code>
   说明：重置用户审核状态，下次发送消息时将重新触发AI审核
 
+• <code>/test</code> - 测试AI审核功能
+  使用方式：<code>/test {测试文本}</code>
+  说明：验证大模型对特定文本的判定结果，检查AI审核是否正常工作
+
 <b>📊 统计与信息</b>
 • <code>/stats</code> - 获取用户聊天统计信息
   使用方式：对用户消息回复发送 <code>/stats</code>
@@ -287,8 +377,13 @@ class BotController {
         case '/banlist':
           await this.banlist(msg);
           break;
+        case '/init':
         case '/initaudit':
           await this.initAudit(msg);
+          break;
+        case '/test':
+        case '/testaudit':
+          await this.testAudit(msg);
           break;
         case '/stats':
           await this.handleUserStats(msg);
