@@ -16,6 +16,8 @@ class User extends Base {
       createdAt: new Date(),
       updatedAt: new Date(),
       msgCount: 0,
+      auditedCount: 0,
+      isAuditPassed: false,
     };
     return super.create(addData);
   }
@@ -45,17 +47,88 @@ class User extends Base {
         if (!user) {
           throw new Error('User not found');
         }
-        
+
         const safeWhere = this.handleWhere({ userId });
-        return await collection.updateOne(
+        return collection.updateOne(
           safeWhere,
           {
             $inc: { msgCount: 1 },
             $set: { updatedAt: new Date() },
-          }
+          },
         );
       },
-      'increment message count'
+      'increment message count',
+    );
+  }
+
+  /**
+   * 增加审核计数
+   * @param {string} userId 用户ID
+   */
+  async incrementAuditedCount(userId) {
+    return this.executeWithRetry(
+      async (collection) => {
+        const user = await collection.findOne({ userId });
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        const safeWhere = this.handleWhere({ userId });
+        return collection.updateOne(
+          safeWhere,
+          {
+            $inc: { auditedCount: 1 },
+            $set: { updatedAt: new Date() },
+          },
+        );
+      },
+      'increment audited count',
+    );
+  }
+
+  /**
+   * 设置审核通过状态
+   * @param {string} userId 用户ID
+   * @param {boolean} isPassed 是否通过
+   */
+  async setAuditPassed(userId, isPassed = true) {
+    return this.executeWithRetry(
+      async (collection) => {
+        const safeWhere = this.handleWhere({ userId });
+        return collection.updateOne(
+          safeWhere,
+          {
+            $set: {
+              isAuditPassed: isPassed,
+              updatedAt: new Date(),
+            },
+          },
+        );
+      },
+      'set audit passed status',
+    );
+  }
+
+  /**
+   * 重置用户审核状态
+   * @param {string} userId 用户ID
+   */
+  async resetAuditStatus(userId) {
+    return this.executeWithRetry(
+      async (collection) => {
+        const safeWhere = this.handleWhere({ userId });
+        return collection.updateOne(
+          safeWhere,
+          {
+            $set: {
+              auditedCount: 0,
+              isAuditPassed: false,
+              updatedAt: new Date(),
+            },
+          },
+        );
+      },
+      'reset audit status',
     );
   }
 }

@@ -115,7 +115,7 @@ class ChatService {
         } else if (message.forward_sender_name) {
           sourceInfo = ' 转发自隐藏用户';
         } else if (message.forward_origin?.sender_user) {
-          sourceInfo = ` 转发自 <code>${message.forward_origin.sender_user.first_name || '用户'}</code>`;
+          sourceInfo = ` 转发自 <code>${message.forward_origin.sender_user.first_name || '用户'}</code>(@${message.forward_origin.sender_user.username})`;
         }
 
         this.bot.sendMessage(

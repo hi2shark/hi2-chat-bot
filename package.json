@@ -1,6 +1,6 @@
 {
   "name": "hi2-chat-bot",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "TG私聊机器人",
   "main": "index.mjs",
   "type": "module",
@@ -13,10 +13,11 @@
   "license": "MIT",
   "dependencies": {
     "cross-env": "^7.0.3",
-    "dayjs": "^1.11.13",
+    "dayjs": "^1.11.19",
     "dotenv": "^16.4.5",
     "mongodb": "^6.14.2",
-    "node-telegram-bot-api": "^0.66.0"
+    "node-telegram-bot-api": "^0.66.0",
+    "openai": "^4.104.0"
   },
   "devDependencies": {
     "eslint": "^7.28.0",

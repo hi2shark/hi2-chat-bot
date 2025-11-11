@@ -6,6 +6,7 @@ import { startUptimeReporting, stopUptimeReporting } from './utils/uptime.mjs';
 import Base from './models/base.mjs';
 import { cleanupAllSockets } from './utils/tcping.mjs';
 import ProcessMonitor from './utils/process-monitor.mjs';
+import logger from './utils/logger.mjs';
 
 // 存储应用实例以便清理
 let botController = null;
@@ -16,7 +17,7 @@ let processMonitor = null;
  */
 function setupGracefulShutdown() {
   const shutdown = async (signal) => {
-    console.log(`收到 ${signal} 信号，开始优雅关闭...`);
+    logger.log(`收到 ${signal} 信号，开始优雅关闭...`);
 
     try {
       // 停止进程监控
@@ -43,10 +44,10 @@ function setupGracefulShutdown() {
       // 关闭数据库连接
       await Base.closeConnection();
 
-      console.log('应用已安全关闭');
+      logger.log('应用已安全关闭');
       process.exit(0);
     } catch (error) {
-      console.error('关闭过程中发生错误:', error);
+      logger.error('关闭过程中发生错误:', error);
       process.exit(1);
     }
   };
@@ -77,9 +78,9 @@ function main() {
 
   // 设置内存警告处理
   processMonitor.on('memoryWarning', (warning) => {
-    console.warn('内存警告:', warning.message);
+    logger.warn('内存警告:', warning.message);
     if (MY_CHAT_ID) {
-      bot.sendMessage(MY_CHAT_ID, `⚠️ 内存警告: ${warning.message}`).catch(console.error);
+      bot.sendMessage(MY_CHAT_ID, `⚠️ 内存警告: ${warning.message}`).catch(logger.error);
     }
   });
 

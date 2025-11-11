@@ -83,11 +83,15 @@ install_docker() {
 # 获取当前配置
 get_current_config() {
   PROJECT_DIR="$HOME/hi2-chat-bot"
-  COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+  ENV_FILE="$PROJECT_DIR/.env"
   
-  if [ -f "$COMPOSE_FILE" ]; then
-    CURRENT_BOT_TOKEN=$(grep "TELEGRAM_BOT_TOKEN=" "$COMPOSE_FILE" | cut -d'=' -f2)
-    CURRENT_CHAT_ID=$(grep "MY_CHAT_ID=" "$COMPOSE_FILE" | cut -d'=' -f2)
+  if [ -f "$ENV_FILE" ]; then
+    CURRENT_BOT_TOKEN=$(grep "^TELEGRAM_BOT_TOKEN=" "$ENV_FILE" | cut -d'=' -f2)
+    CURRENT_CHAT_ID=$(grep "^MY_CHAT_ID=" "$ENV_FILE" | cut -d'=' -f2)
+    CURRENT_AI_ENABLED=$(grep "^AI_AUDIT_ENABLED=" "$ENV_FILE" | cut -d'=' -f2)
+    CURRENT_OPENAI_KEY=$(grep "^OPENAI_API_KEY=" "$ENV_FILE" | cut -d'=' -f2)
+    CURRENT_LOG_PATH=$(grep "^LOG_FILE_PATH=" "$ENV_FILE" | cut -d'=' -f2)
+    CURRENT_LOG_MAX_SIZE=$(grep "^LOG_MAX_SIZE=" "$ENV_FILE" | cut -d'=' -f2)
     return 0
   else
     return 1
@@ -105,16 +109,18 @@ setup_project() {
   print_success "创建目录: $PROJECT_DIR"
   
   # 检查是否已经存在配置文件
-  COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+  ENV_FILE="$PROJECT_DIR/.env"
   OVERWRITE=true
   
-  if [ -f "$COMPOSE_FILE" ]; then
+  if [ -f "$ENV_FILE" ]; then
     print_warning "检测到已有配置文件！"
     get_current_config
     
     print_message "当前配置:"
     echo "  Telegram Bot Token: ${CURRENT_BOT_TOKEN:-未设置}"
     echo "  Chat ID: ${CURRENT_CHAT_ID:-未设置}"
+    echo "  AI审核: ${CURRENT_AI_ENABLED:-未启用}"
+    echo "  日志文件: $([ -n "$CURRENT_LOG_PATH" ] && echo "已启用 (最大: ${CURRENT_LOG_MAX_SIZE:-10}MB)" || echo "未启用")"
     
     print_message "是否要修改现有配置? (y/n):"
     read -p "> " MODIFY_CONFIG
@@ -139,11 +145,11 @@ setup_project() {
     # 如果输入为空且有当前值，则使用当前值
     if [ -z "$BOT_TOKEN" ] && [ -n "$CURRENT_BOT_TOKEN" ]; then
       BOT_TOKEN="$CURRENT_BOT_TOKEN"
-      print_message "使用当前值: $BOT_TOKEN"
+      print_message "使用当前值"
     fi
     
     # 获取ChatId (可选)
-    print_message "请输入您的ChatId (从@userinfobot获取，可以为空，之后通过'/hello'命令获取):"
+    print_message "请输入您的ChatId (从@userinfobot获取，可留空后用'/hello'命令获取):"
     if [ -n "$CURRENT_CHAT_ID" ]; then
       print_message "当前值: $CURRENT_CHAT_ID"
       print_message "直接按回车保留当前值"
@@ -153,28 +159,135 @@ setup_project() {
     # 如果输入为空且有当前值，则使用当前值
     if [ -z "$CHAT_ID" ] && [ -n "$CURRENT_CHAT_ID" ]; then
       CHAT_ID="$CURRENT_CHAT_ID"
-      print_message "使用当前值: $CHAT_ID"
+      print_message "使用当前值"
     fi
     
-    # 创建或覆盖docker-compose.yml文件
-    cat > "$PROJECT_DIR/docker-compose.yml" << EOF
+    # 询问是否启用AI审核
+    print_message "是否启用AI内容审核功能? (y/n):"
+    if [ -n "$CURRENT_AI_ENABLED" ]; then
+      print_message "当前状态: $([ "$CURRENT_AI_ENABLED" = "1" ] && echo "已启用" || echo "未启用")"
+    fi
+    read -p "> " ENABLE_AI
+    
+    AI_ENABLED="0"
+    OPENAI_KEY=""
+    OPENAI_URL="https://api.openai.com/v1"
+    OPENAI_MODEL="gpt-3.5-turbo"
+    AI_COUNT="1"
+    
+    if [[ "$ENABLE_AI" == "y" || "$ENABLE_AI" == "Y" ]]; then
+      AI_ENABLED="1"
+      
+      # 获取OpenAI API Key
+      print_message "请输入OpenAI API Key:"
+      if [ -n "$CURRENT_OPENAI_KEY" ]; then
+        print_message "当前有已保存的密钥，直接按回车保留"
+      fi
+      read -p "> " OPENAI_KEY
+      
+      if [ -z "$OPENAI_KEY" ] && [ -n "$CURRENT_OPENAI_KEY" ]; then
+        OPENAI_KEY="$CURRENT_OPENAI_KEY"
+        print_message "使用已保存的密钥"
+      fi
+      
+      # 获取API Base URL (可选)
+      print_message "请输入OpenAI API Base URL (直接回车使用默认: https://api.openai.com/v1):"
+      read -p "> " OPENAI_URL_INPUT
+      if [ -n "$OPENAI_URL_INPUT" ]; then
+        OPENAI_URL="$OPENAI_URL_INPUT"
+      fi
+      
+      # 获取模型名称 (可选)
+      print_message "请输入AI模型名称 (直接回车使用默认: gpt-3.5-turbo):"
+      read -p "> " OPENAI_MODEL_INPUT
+      if [ -n "$OPENAI_MODEL_INPUT" ]; then
+        OPENAI_MODEL="$OPENAI_MODEL_INPUT"
+      fi
+      
+      # 获取审核次数 (可选)
+      print_message "请输入需要审核的消息次数 (直接回车使用默认: 1):"
+      read -p "> " AI_COUNT_INPUT
+      if [ -n "$AI_COUNT_INPUT" ]; then
+        AI_COUNT="$AI_COUNT_INPUT"
+      fi
+    fi
+    
+    # 询问是否启用日志文件
+    print_message "是否启用日志文件记录? (y/n):"
+    if [ -n "$CURRENT_LOG_PATH" ]; then
+      print_message "当前状态: 已启用"
+      print_message "当前日志最大大小: ${CURRENT_LOG_MAX_SIZE:-10}MB"
+    fi
+    read -p "> " ENABLE_LOG
+    
+    LOG_PATH=""
+    LOG_MAX_SIZE="10"
+    if [[ "$ENABLE_LOG" == "y" || "$ENABLE_LOG" == "Y" ]]; then
+      LOG_PATH="/app/logs/chatbot.log"
+      mkdir -p "$PROJECT_DIR/logs"
+      print_success "已创建日志目录: $PROJECT_DIR/logs"
+      
+      # 询问日志文件最大大小
+      print_message "请输入日志文件最大大小(MB) (直接回车使用默认: 10MB):"
+      if [ -n "$CURRENT_LOG_MAX_SIZE" ]; then
+        print_message "当前值: ${CURRENT_LOG_MAX_SIZE}MB, 直接按回车保留当前值"
+      fi
+      read -p "> " LOG_MAX_SIZE_INPUT
+      if [ -n "$LOG_MAX_SIZE_INPUT" ]; then
+        LOG_MAX_SIZE="$LOG_MAX_SIZE_INPUT"
+      elif [ -n "$CURRENT_LOG_MAX_SIZE" ]; then
+        LOG_MAX_SIZE="$CURRENT_LOG_MAX_SIZE"
+        print_message "使用当前值: ${LOG_MAX_SIZE}MB"
+      fi
+    fi
+    
+    # 创建 .env 文件
+    cat > "$ENV_FILE" << EOF
+# ===========================================
+# TG私聊机器人环境变量配置
+# ===========================================
+
+# 必填配置
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+MY_CHAT_ID=$CHAT_ID
+
+# MongoDB配置
+MONGODB_URL=mongodb://mongodb:27017
+MONGODB_NAME=hi2chatbot
+
+# 基础功能配置
+ALLOW_EDIT=0
+MESSAGE_CLEAR_HOURS=720
+HIDE_START_MESSAGE=0
+TZ=Asia/Hong_Kong
+
+# AI审核配置
+AI_AUDIT_ENABLED=$AI_ENABLED
+AI_AUDIT_COUNT=$AI_COUNT
+OPENAI_API_KEY=$OPENAI_KEY
+OPENAI_BASE_URL=$OPENAI_URL
+OPENAI_MODEL=$OPENAI_MODEL
+
+# 日志配置
+LOG_FILE_PATH=$LOG_PATH
+LOG_MAX_SIZE=$LOG_MAX_SIZE
+EOF
+
+    print_success "配置文件已创建: $ENV_FILE"
+    
+    # 创建 docker-compose.yml 文件
+    cat > "$PROJECT_DIR/docker-compose.yml" << 'EOF'
 services:
   # 私聊机器人
   hi2ChatBot:
     container_name: hi2-chat-bot
     image: ghcr.io/hi2shark/hi2-chat-bot:latest
     restart: unless-stopped
+    env_file:
+      - .env
     volumes:
       - /etc/localtime:/etc/localtime:ro
-    environment:
-      # 机器人Token
-      - TELEGRAM_BOT_TOKEN=$BOT_TOKEN
-      # 您的ChatId
-      - MY_CHAT_ID=$CHAT_ID
-      # MongoDB连接配置
-      - MONGODB_URL=mongodb://mongodb:27017
-      - MONGODB_NAME=hi2chatbot
-      - TZ=Asia/Hong_Kong
+      - ./logs:/app/logs
     depends_on:
       - mongodb
 
@@ -188,12 +301,17 @@ services:
       - ./mongo-data:/data/db
     environment:
       - TZ=Asia/Hong_Kong
-    # 需要映射端口时取消注释
-    # ports:
-    #   - "27017:27017"
 EOF
 
-    print_success "配置文件已创建: $PROJECT_DIR/docker-compose.yml"
+    print_success "Docker Compose配置已创建: $PROJECT_DIR/docker-compose.yml"
+    
+    # 显示配置摘要
+    print_success "配置完成！配置摘要:"
+    echo "  项目目录: $PROJECT_DIR"
+    echo "  Bot Token: ${BOT_TOKEN:0:10}..."
+    echo "  Chat ID: ${CHAT_ID:-未设置}"
+    echo "  AI审核: $([ "$AI_ENABLED" = "1" ] && echo "已启用" || echo "未启用")"
+    echo "  日志文件: $([ -n "$LOG_PATH" ] && echo "已启用 (最大: ${LOG_MAX_SIZE}MB)" || echo "未启用")"
   fi
 }
 

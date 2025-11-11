@@ -4,6 +4,15 @@
  */
 
 import { EventEmitter } from 'events';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// 读取 package.json 版本号
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDirPath = dirname(currentFilePath);
+const packageJson = JSON.parse(readFileSync(join(currentDirPath, '../../package.json'), 'utf-8'));
+const APP_VERSION = packageJson.version;
 
 class ProcessMonitor extends EventEmitter {
   constructor(options = {}) {
@@ -14,7 +23,7 @@ class ProcessMonitor extends EventEmitter {
       enabled: options.enabled !== false,
       ...options,
     };
-    
+
     this.isRunning = false;
     this.monitorTimer = null;
     this.startTime = Date.now();
@@ -27,11 +36,11 @@ class ProcessMonitor extends EventEmitter {
   getMemoryUsage() {
     const usage = process.memoryUsage();
     return {
-      rss: Math.round(usage.rss / 1024 / 1024 * 100) / 100, // MB
-      heapUsed: Math.round(usage.heapUsed / 1024 / 1024 * 100) / 100, // MB
-      heapTotal: Math.round(usage.heapTotal / 1024 / 1024 * 100) / 100, // MB
-      external: Math.round(usage.external / 1024 / 1024 * 100) / 100, // MB
-      arrayBuffers: Math.round((usage.arrayBuffers || 0) / 1024 / 1024 * 100) / 100, // MB
+      rss: Math.round((usage.rss / 1024 / 1024) * 100) / 100, // MB
+      heapUsed: Math.round((usage.heapUsed / 1024 / 1024) * 100) / 100, // MB
+      heapTotal: Math.round((usage.heapTotal / 1024 / 1024) * 100) / 100, // MB
+      external: Math.round((usage.external / 1024 / 1024) * 100) / 100, // MB
+      arrayBuffers: Math.round(((usage.arrayBuffers || 0) / 1024 / 1024) * 100) / 100, // MB
     };
   }
 
@@ -41,7 +50,7 @@ class ProcessMonitor extends EventEmitter {
   getSystemInfo() {
     const uptime = Date.now() - this.startTime;
     const processUptime = process.uptime() * 1000;
-    
+
     return {
       uptime: Math.round(uptime / 1000), // 秒
       processUptime: Math.round(processUptime / 1000), // 秒
@@ -58,12 +67,12 @@ class ProcessMonitor extends EventEmitter {
   checkMemory() {
     const current = this.getMemoryUsage();
     const system = this.getSystemInfo();
-    
+
     // 检查内存增长
     if (this.lastMemoryUsage) {
       const heapGrowth = current.heapUsed - this.lastMemoryUsage.heapUsed;
       const rssGrowth = current.rss - this.lastMemoryUsage.rss;
-      
+
       // 如果内存增长超过阈值，发出警告
       if (heapGrowth > this.options.memoryThreshold / 1024 / 1024) {
         this.emit('memoryWarning', {
@@ -74,7 +83,7 @@ class ProcessMonitor extends EventEmitter {
           message: `堆内存增长 ${heapGrowth.toFixed(2)} MB`,
         });
       }
-      
+
       if (rssGrowth > this.options.memoryThreshold / 1024 / 1024) {
         this.emit('memoryWarning', {
           type: 'rss_growth',
@@ -85,7 +94,7 @@ class ProcessMonitor extends EventEmitter {
         });
       }
     }
-    
+
     // 检查绝对内存使用量
     if (current.heapUsed > 200) { // 200MB
       this.emit('memoryWarning', {
@@ -94,10 +103,10 @@ class ProcessMonitor extends EventEmitter {
         message: `堆内存使用过高: ${current.heapUsed} MB`,
       });
     }
-    
+
     // 更新上次内存使用记录
     this.lastMemoryUsage = current;
-    
+
     // 发出监控事件
     this.emit('stats', {
       memory: current,
@@ -113,20 +122,20 @@ class ProcessMonitor extends EventEmitter {
     if (!this.options.enabled || this.isRunning) {
       return;
     }
-    
+
     this.isRunning = true;
     this.startTime = Date.now();
-    
+
     console.log('进程监控已启动');
-    
+
     // 立即执行一次检查
     this.checkMemory();
-    
+
     // 设置定时检查
     this.monitorTimer = setInterval(() => {
       this.checkMemory();
     }, this.options.interval);
-    
+
     this.emit('started');
   }
 
@@ -137,14 +146,14 @@ class ProcessMonitor extends EventEmitter {
     if (!this.isRunning) {
       return;
     }
-    
+
     this.isRunning = false;
-    
+
     if (this.monitorTimer) {
       clearInterval(this.monitorTimer);
       this.monitorTimer = null;
     }
-    
+
     console.log('进程监控已停止');
     this.emit('stopped');
   }
@@ -155,7 +164,7 @@ class ProcessMonitor extends EventEmitter {
   getStatusReport() {
     const memory = this.getMemoryUsage();
     const system = this.getSystemInfo();
-    
+
     return {
       memory,
       system,
@@ -174,14 +183,19 @@ class ProcessMonitor extends EventEmitter {
   formatStatusReport() {
     const report = this.getStatusReport();
     const { memory, system } = report;
-    
+
     const formatUptime = (seconds) => {
-      const hours = Math.floor(seconds / 3600);
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
-      const secs = seconds % 60;
-      return `${hours}h ${minutes}m ${secs}s`;
+      const secs = Math.floor(seconds % 60);
+
+      if (days > 0) {
+        return `${days}天 ${hours}小时 ${minutes}分 ${secs}秒`;
+      }
+      return `${hours}小时 ${minutes}分 ${secs}秒`;
     };
-    
+
     return `📊 系统状态报告
 🕐 运行时间: ${formatUptime(system.uptime)}
 💾 内存使用:
@@ -190,6 +204,7 @@ class ProcessMonitor extends EventEmitter {
   • 外部内存: ${memory.external} MB
   • 数组缓冲区: ${memory.arrayBuffers} MB
 🖥️ 系统信息:
+  • 版本: v${APP_VERSION}
   • Node.js: ${system.nodeVersion}
   • 平台: ${system.platform} (${system.arch})
   • 进程ID: ${system.pid}
@@ -197,4 +212,4 @@ class ProcessMonitor extends EventEmitter {
   }
 }
 
-export default ProcessMonitor; 
+export default ProcessMonitor;
