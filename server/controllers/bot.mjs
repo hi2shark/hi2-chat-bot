@@ -423,7 +423,8 @@ class BotController {
                   try {
                     await this.bot.sendMessage(
                       userId,
-                      '⚠️ 您的消息因包含违规内容已被系统自动拦截，您已被加入黑名单。',
+                      `⚠️ 您的消息因包含违规内容已被系统自动拦截，您已被加入黑名单。\n\n您的ID是<code>${userId}</code>`,
+                      { parse_mode: 'HTML' },
                     );
                     logger.log(`📤 已通知用户 ${userId} 被AI自动拉黑`);
                   } catch (notifyError) {
