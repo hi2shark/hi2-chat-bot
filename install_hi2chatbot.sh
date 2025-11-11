@@ -89,6 +89,7 @@ get_current_config() {
     CURRENT_BOT_TOKEN=$(grep "^TELEGRAM_BOT_TOKEN=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_CHAT_ID=$(grep "^MY_CHAT_ID=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_AI_ENABLED=$(grep "^AI_AUDIT_ENABLED=" "$ENV_FILE" | cut -d'=' -f2)
+    CURRENT_AI_NOTIFY=$(grep "^AI_AUDIT_NOTIFY_USER=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_OPENAI_KEY=$(grep "^OPENAI_API_KEY=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_LOG_PATH=$(grep "^LOG_FILE_PATH=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_LOG_MAX_SIZE=$(grep "^LOG_MAX_SIZE=" "$ENV_FILE" | cut -d'=' -f2)
@@ -170,6 +171,7 @@ setup_project() {
     read -p "> " ENABLE_AI
     
     AI_ENABLED="0"
+    AI_NOTIFY="0"
     OPENAI_KEY=""
     OPENAI_URL="https://api.openai.com/v1"
     OPENAI_MODEL="gpt-3.5-turbo"
@@ -209,6 +211,19 @@ setup_project() {
       read -p "> " AI_COUNT_INPUT
       if [ -n "$AI_COUNT_INPUT" ]; then
         AI_COUNT="$AI_COUNT_INPUT"
+      fi
+      
+      # 询问是否通知被拉黑的用户
+      print_message "是否通知被AI拉黑的用户? (y/n, 默认: n):"
+      if [ -n "$CURRENT_AI_NOTIFY" ]; then
+        print_message "当前状态: $([ "$CURRENT_AI_NOTIFY" = "1" ] && echo "通知" || echo "不通知")"
+      fi
+      read -p "> " NOTIFY_USER
+      
+      if [[ "$NOTIFY_USER" == "y" || "$NOTIFY_USER" == "Y" ]]; then
+        AI_NOTIFY="1"
+      elif [ -z "$NOTIFY_USER" ] && [ "$CURRENT_AI_NOTIFY" = "1" ]; then
+        AI_NOTIFY="1"
       fi
     fi
     
@@ -264,6 +279,7 @@ TZ=Asia/Hong_Kong
 # AI审核配置
 AI_AUDIT_ENABLED=$AI_ENABLED
 AI_AUDIT_COUNT=$AI_COUNT
+AI_AUDIT_NOTIFY_USER=$AI_NOTIFY
 OPENAI_API_KEY=$OPENAI_KEY
 OPENAI_BASE_URL=$OPENAI_URL
 OPENAI_MODEL=$OPENAI_MODEL

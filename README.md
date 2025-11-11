@@ -43,6 +43,7 @@ TG私聊机器人可以将发送给机器人的私聊消息转发给您，并允
 | `/hello` | 直接发送 | 获取当前聊天的ChatId（未配置MY_CHAT_ID时可用） |
 
 ## 更新说明
+`2.2.0`：新增AI审核功能，支持自动拉黑违规用户
 
 ## 使用Docker Compose方式部署机器人
 
@@ -73,6 +74,7 @@ services:
       # AI审核配置（可选）
       # - AI_AUDIT_ENABLED=1
       # - AI_AUDIT_COUNT=1
+      # - AI_AUDIT_NOTIFY_USER=0
       # - OPENAI_API_KEY=your_api_key
       # - OPENAI_BASE_URL=https://api.openai.com/v1
       # - OPENAI_MODEL=gpt-3.5-turbo
@@ -131,6 +133,7 @@ TZ=Asia/Hong_Kong
 # AI审核配置（可选）
 AI_AUDIT_ENABLED=1
 AI_AUDIT_COUNT=1
+AI_AUDIT_NOTIFY_USER=0
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-3.5-turbo
@@ -207,6 +210,7 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 | `AI_AUDIT_ENABLED` | 是否启用AI审核功能，填入1启用 | `0`（不启用） |
 | `AI_AUDIT_COUNT` | 需要审核的消息次数 | `1` |
 | `AI_AUDIT_PROMPT_FILE` | AI审核提示词文件路径，为空则使用默认提示词 | 无 |
+| `AI_AUDIT_NOTIFY_USER` | 是否通知被AI拉黑的用户，填入1通知 | `0`（不通知） |
 | `OPENAI_API_KEY` | OpenAI API密钥，启用AI审核时必填 | 无 |
 | `OPENAI_BASE_URL` | OpenAI API基础URL，支持自定义（如使用代理或其他兼容接口） | `https://api.openai.com/v1` |
 | `OPENAI_MODEL` | 使用的AI模型名称 | `gpt-3.5-turbo` |
@@ -216,11 +220,13 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 
 ## AI审核功能说明
 
-AI审核功能可以自动检测用户发送的消息是否包含广告内容，检测到广告后会自动拉黑用户且不转发消息给机器人所有者。
+- AI审核功能可以自动检测用户发送的消息是否包含广告内容，检测到广告后会自动拉黑用户且不转发消息给机器人所有者。  
+- 审核消息次数的说明：对方前N条消息需要AI进行文本审核，**且不能包含媒体信息**，如图片、视频等，通过后可正常转发媒体消息。  
 
 ### 功能特点
 - **智能检测**：基于OpenAI大语言模型，准确识别广告、推广、诈骗等违规内容
 - **自动拉黑**：检测到广告后自动拉黑用户，备注中标明"AI自动拉黑-广告"
+- **用户通知**：支持配置是否通知被拉黑的用户，让用户了解被拦截的原因
 - **媒体内容限制**：新用户必须先发送纯文本通过审核，才能发送图片、视频等媒体内容
 - **灵活配置**：支持自定义审核次数、API地址和模型
 - **无感通过**：正常用户的前N条消息通过审核后，后续消息不再审核
@@ -230,9 +236,10 @@ AI审核功能可以自动检测用户发送的消息是否包含广告内容，
 1. 在环境变量中设置 `AI_AUDIT_ENABLED=1` 启用功能
 2. 配置 `OPENAI_API_KEY` 为您的API密钥
 3. （可选）配置 `AI_AUDIT_COUNT` 设置审核消息次数，默认为1次
-4. （可选）配置 `OPENAI_BASE_URL` 使用自定义API地址
-5. （可选）配置 `OPENAI_MODEL` 选择使用的模型
-6. （可选）配置 `AI_AUDIT_PROMPT_FILE` 使用自定义提示词文件
+4. （可选）配置 `AI_AUDIT_NOTIFY_USER=1` 启用被拉黑时通知用户，默认不通知
+5. （可选）配置 `OPENAI_BASE_URL` 使用自定义API地址
+6. （可选）配置 `OPENAI_MODEL` 选择使用的模型
+7. （可选）配置 `AI_AUDIT_PROMPT_FILE` 使用自定义提示词文件
 
 ### 自定义审核提示词
 项目提供了 `ai-audit-prompt.example.txt` 示例文件，您可以：

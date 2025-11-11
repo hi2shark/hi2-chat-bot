@@ -418,6 +418,19 @@ class BotController {
                 logger.log(`   原因: ${auditResult.reason}`);
                 logger.log(`   内容: ${messageText.substring(0, 100)}...`);
 
+                // 如果配置了通知用户，则发送通知消息
+                if (this.auditService.shouldNotifyUser()) {
+                  try {
+                    await this.bot.sendMessage(
+                      userId,
+                      '⚠️ 您的消息因包含违规内容已被系统自动拦截，您已被加入黑名单。',
+                    );
+                    logger.log(`📤 已通知用户 ${userId} 被AI自动拉黑`);
+                  } catch (notifyError) {
+                    logger.error(`发送拉黑通知失败: ${notifyError.message}`);
+                  }
+                }
+
                 // 不转发消息，直接返回
                 return;
               }
