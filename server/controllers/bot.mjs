@@ -6,6 +6,7 @@
  *  - /ban 拉黑用户
  *  - /unban 解除拉黑用户
  *  - /banlist 查看黑名单列表
+ *  - /bansearch 搜索黑名单
  *  - /initaudit 初始化用户审核状态
  *  - /test 测试AI审核功能
  *  - /del 删除消息 通用别名：/d、/remove、/c、/cancel
@@ -219,6 +220,83 @@ class BotController {
   }
 
   /**
+   * 搜索黑名单
+   * @param {Object} msg 消息对象
+   */
+  async bansearch(msg) {
+    const textData = msg.text.split(' ');
+    const keyword = textData.slice(1).join(' ').trim();
+
+    if (!keyword || keyword.length === 0) {
+      this.bot.sendMessage(
+        this.myChatId,
+        '❌ 请提供搜索关键词\n\n使用方法：<code>/bansearch {关键词}</code>\n\n示例：\n• <code>/bansearch 123456789</code> - 搜索用户ID\n• <code>/bansearch 广告</code> - 搜索昵称或备注',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    // 发送搜索中提示
+    const searchingMsg = await this.bot.sendMessage(this.myChatId, '🔍 正在搜索...');
+
+    try {
+      const result = await this.blacklistService.search(keyword);
+
+      if (!result.success) {
+        await this.bot.editMessageText(
+          `❌ 搜索失败: ${result.message}`,
+          {
+            chat_id: this.myChatId,
+            message_id: searchingMsg.message_id,
+          },
+        );
+        return;
+      }
+
+      if (result.data.length === 0) {
+        await this.bot.editMessageText(
+          `🔍 <b>搜索结果</b>\n\n未找到包含关键词 "<code>${result.keyword}</code>" 的黑名单记录`,
+          {
+            chat_id: this.myChatId,
+            message_id: searchingMsg.message_id,
+            parse_mode: 'HTML',
+          },
+        );
+        return;
+      }
+
+      // 构建搜索结果
+      const texts = [`🔍 <b>搜索结果</b> (找到 ${result.data.length} 条记录)\n关键词: <code>${result.keyword}</code>\n`];
+      result.data.forEach((item, index) => {
+        const createdAt = dayjs(item.createdAt).format('YYYY-MM-DD HH:mm');
+        texts.push(`${index + 1}. <b>用户ID</b>: <code>${item.chatId}</code>`);
+        if (item.nickname) texts.push(`   <b>昵称</b>: ${item.nickname}`);
+        if (item.remark) texts.push(`   <b>备注</b>: ${item.remark}`);
+        texts.push(`   <b>时间</b>: ${createdAt}`);
+        texts.push(''); // 添加空行分隔不同用户
+      });
+
+      await this.bot.editMessageText(
+        texts.join('\n'),
+        {
+          chat_id: this.myChatId,
+          message_id: searchingMsg.message_id,
+          parse_mode: 'HTML',
+        },
+      );
+    } catch (error) {
+      logger.error('搜索黑名单失败:', error);
+      await this.bot.editMessageText(
+        `❌ 搜索失败: ${error.message}`,
+        {
+          chat_id: this.myChatId,
+          message_id: searchingMsg.message_id,
+        },
+      );
+    }
+  }
+
+  /**
    * 测试AI审核功能
    * @param {Object} msg 消息对象
    */
@@ -405,6 +483,10 @@ ${result.reason}${actionText}
 
 • <code>/banlist</code> - 查看黑名单列表（支持翻页）
 
+• <code>/bansearch</code> - 搜索黑名单
+  使用方式：<code>/bansearch {关键词}</code>
+  说明：根据用户ID、昵称或备注搜索黑名单记录
+
 <b>🤖 AI审核管理</b>
 • <code>/initaudit</code> - 初始化用户审核状态
   使用方式：
@@ -454,6 +536,9 @@ ${result.reason}${actionText}
           break;
         case '/banlist':
           await this.banlist();
+          break;
+        case '/bansearch':
+          await this.bansearch(msg);
           break;
         case '/init':
         case '/initaudit':

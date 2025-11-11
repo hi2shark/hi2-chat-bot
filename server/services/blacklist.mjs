@@ -95,15 +95,77 @@ class BlacklistService {
 
   /**
    * 获取黑名单列表
-   * @returns {Array} 黑名单列表
+   * @returns {Array} 黑名单列表，按时间降序排序（最新的在前）
    */
   async list() {
     const blacklistModel = new models.Blacklist();
-    const list = await blacklistModel.allList();
+    // 按 createdAt 降序排序（-1 表示降序，最新的在前）
+    const list = await blacklistModel.allList({}, { createdAt: -1 });
     return {
       success: true,
       data: list,
     };
+  }
+
+  /**
+   * 搜索黑名单
+   * @param {string} keyword 搜索关键词（用户ID或昵称）
+   * @returns {Object} 搜索结果
+   */
+  async search(keyword) {
+    if (!keyword || keyword.trim().length === 0) {
+      return {
+        success: false,
+        message: '请提供搜索关键词',
+      };
+    }
+
+    const blacklistModel = new models.Blacklist();
+    const trimmedKeyword = keyword.trim();
+
+    // 尝试作为数字ID搜索
+    const chatIdNumber = parseInt(trimmedKeyword, 10);
+    
+    // 构建查询条件：匹配 chatId 或 nickname 或 remark
+    let results = [];
+    
+    try {
+      // 如果是有效的数字，搜索 chatId
+      if (!Number.isNaN(chatIdNumber)) {
+        const exactMatch = await blacklistModel.findOne({ chatId: chatIdNumber });
+        if (exactMatch) {
+          results.push(exactMatch);
+        }
+      }
+
+      // 搜索昵称和备注（使用正则表达式进行模糊匹配）
+      const { collection } = await blacklistModel.connect();
+      const regex = new RegExp(trimmedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      
+      const textMatches = await collection.find({
+        $or: [
+          { nickname: { $regex: regex } },
+          { remark: { $regex: regex } },
+        ],
+      }).sort({ createdAt: -1 }).toArray();
+
+      // 合并结果并去重
+      const allResults = [...results, ...textMatches];
+      const uniqueResults = Array.from(
+        new Map(allResults.map((item) => [item.chatId, item])).values(),
+      );
+
+      return {
+        success: true,
+        data: uniqueResults,
+        keyword: trimmedKeyword,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `搜索失败: ${error.message}`,
+      };
+    }
   }
 }
 
