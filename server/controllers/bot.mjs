@@ -345,7 +345,7 @@ class BotController {
       const resultText = `${statusIcon} <b>AI审核测试结果</b>
 
 <b>📝 测试文本</b>
-<code>${testText.length > 200 ? testText.substring(0, 200) + '...' : testText}</code>
+<code>${testText.length > 200 ? `${testText.substring(0, 200)}...` : testText}</code>
 
 <b>🎯 判定结果</b>
 ${statusText}
@@ -937,10 +937,10 @@ ${result.reason}${actionText}
             // 从回调数据中获取页码
             page = parseInt(params[0], 10) || 1;
           }
-          
+
           // 确保页码有效
           page = Math.max(1, page);
-          
+
           // 如果点击的是当前页码按钮，不做任何操作
           if (params[0] === 'current') {
             await this.bot.answerCallbackQuery(callbackQuery.id, {
@@ -949,13 +949,25 @@ ${result.reason}${actionText}
             return;
           }
 
-          // 更新黑名单列表
-          await this.banlist(page, message.message_id);
+          try {
+            // 更新黑名单列表
+            await this.banlist(page, message.message_id);
 
-          // 回应回调查询
-          await this.bot.answerCallbackQuery(callbackQuery.id, {
-            text: `已切换到第 ${page} 页`,
-          });
+            // 回应回调查询
+            await this.bot.answerCallbackQuery(callbackQuery.id, {
+              text: `已切换到第 ${page} 页`,
+            });
+          } catch (error) {
+            // 特殊处理 Telegram "消息未修改" 错误
+            if (error.message && error.message.includes('message is not modified')) {
+              await this.bot.answerCallbackQuery(callbackQuery.id, {
+                text: '✅ 已经是最新数据',
+              });
+            } else {
+              // 其他错误继续抛出
+              throw error;
+            }
+          }
           break;
         }
         default:
