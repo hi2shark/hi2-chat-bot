@@ -18,6 +18,7 @@ class User extends Base {
       msgCount: 0,
       auditedCount: 0,
       isAuditPassed: false,
+      isCaptchaPassed: false,
     };
     return super.create(addData);
   }
@@ -129,6 +130,51 @@ class User extends Base {
         );
       },
       'reset audit status',
+    );
+  }
+
+  /**
+   * 设置验证码通过状态
+   * @param {string} userId 用户ID
+   * @param {boolean} isPassed 是否通过
+   */
+  async setCaptchaPassed(userId, isPassed = true) {
+    return this.executeWithRetry(
+      async (collection) => {
+        const safeWhere = this.handleWhere({ userId });
+        return collection.updateOne(
+          safeWhere,
+          {
+            $set: {
+              isCaptchaPassed: isPassed,
+              updatedAt: new Date(),
+            },
+          },
+        );
+      },
+      'set captcha passed status',
+    );
+  }
+
+  /**
+   * 重置用户验证码状态
+   * @param {string} userId 用户ID
+   */
+  async resetCaptchaStatus(userId) {
+    return this.executeWithRetry(
+      async (collection) => {
+        const safeWhere = this.handleWhere({ userId });
+        return collection.updateOne(
+          safeWhere,
+          {
+            $set: {
+              isCaptchaPassed: false,
+              updatedAt: new Date(),
+            },
+          },
+        );
+      },
+      'reset captcha status',
     );
   }
 }

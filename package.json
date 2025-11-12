@@ -1,6 +1,6 @@
 {
   "name": "hi2-chat-bot",
-  "version": "2.2.4",
+  "version": "2.3.0",
   "description": "TG私聊机器人",
   "main": "index.mjs",
   "type": "module",
@@ -12,6 +12,7 @@
   "author": "hi2hi",
   "license": "MIT",
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.58",
     "cross-env": "^7.0.3",
     "dayjs": "^1.11.19",
     "dotenv": "^16.4.5",

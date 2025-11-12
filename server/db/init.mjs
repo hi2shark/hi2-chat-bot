@@ -9,6 +9,7 @@ const dbNames = [
   'message',
   'blacklist',
   'user',
+  'captcha',
 ];
 
 /**

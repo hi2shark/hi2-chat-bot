@@ -12,6 +12,7 @@ TG私聊机器人可以将发送给机器人的私聊消息转发给您，并允
 - **消息撤回**：支持撤回已发送的消息
 - **黑名单管理**：可以拉黑和解除拉黑用户
 - **群聊支持**：可以在群组中回复私聊消息
+- **人机验证**：图形验证码验证，防止机器人骚扰（支持字符+算术题）
 - **AI内容审核**：基于OpenAI的智能广告检测，自动拉黑违规用户
 
 ## 使用须知
@@ -33,7 +34,9 @@ TG私聊机器人可以将发送给机器人的私聊消息转发给您，并允
 | `/unban` | 回复/直接发送 | 解除拉黑：回复消息使用`/unban`或直接发送`/unban {userId}` |
 | `/banlist` | 直接发送 | 查看当前黑名单列表（支持翻页，每页显示5条记录） |
 | `/bansearch` | 直接发送 | 搜索黑名单，发送`/bansearch {关键词}`根据用户ID、昵称或备注搜索 |
-| `/initaudit` | 回复/直接发送 | 初始化用户审核状态：回复消息使用`/initaudit`或直接发送`/initaudit {userId}` |
+| `/init` | 回复/直接发送 | 初始化用户状态（重置审核和验证码）：回复消息使用`/init`或直接发送`/init {userId}` |
+| `/newcaptcha` | 直接发送（用户） | 重新获取验证码（用户在验证过程中使用） |
+| `/testcaptcha` | 直接发送 | 测试验证码功能，生成测试验证码图片检查功能是否正常 |
 | `/del` | 回复 | 撤回消息，别名：`/d`、`/c`、`/cancel`、`/remove` |
 | `/ping` | 直接发送 | 检测机器人是否在线 |
 | `/dc` | 直接发送 | 检测与Telegram服务器的连接延迟 |
@@ -45,6 +48,7 @@ TG私聊机器人可以将发送给机器人的私聊消息转发给您，并允
 | `/hello` | 直接发送 | 获取当前聊天的ChatId（未配置MY_CHAT_ID时可用） |
 
 ## 更新说明
+`2.3.0`：新增人机验证功能，支持图形验证码（字符+算术题）
 `2.2.0`：新增AI审核功能，支持自动拉黑违规用户
 
 ## 使用Docker Compose方式部署机器人
@@ -73,6 +77,11 @@ services:
       # MongoDB连接配置
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_NAME=hi2chatbot
+      # 人机验证配置（可选）
+      # - CAPTCHA_ENABLED=1
+      # - CAPTCHA_MAX_RETRIES=3
+      # - CAPTCHA_FAIL_ACTION=ban
+      # - CAPTCHA_TIMEOUT=180
       # AI审核配置（可选）
       # - AI_AUDIT_ENABLED=1
       # - AI_AUDIT_COUNT=1
@@ -130,7 +139,14 @@ MONGODB_NAME=hi2chatbot
 ALLOW_EDIT=0
 MESSAGE_CLEAR_HOURS=720
 HIDE_START_MESSAGE=0
+ENABLE_DC_PING=0
 TZ=Asia/Hong_Kong
+
+# 人机验证配置（可选）
+CAPTCHA_ENABLED=0
+CAPTCHA_MAX_RETRIES=3
+CAPTCHA_FAIL_ACTION=ban
+CAPTCHA_TIMEOUT=180
 
 # AI审核配置（可选）
 AI_AUDIT_ENABLED=1
@@ -206,9 +222,14 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 | `ALLOW_EDIT` | 是否允许编辑消息 | `0`（不允许） |
 | `MESSAGE_CLEAR_HOURS` | 自动清除消息关系记录的时间，单位：小时 | `720`（30天） |
 | `HIDE_START_MESSAGE` | 隐藏启动消息，填入1隐藏，留空或者不为1则不隐藏 | 留空 |
+| `ENABLE_DC_PING` | 启用DC Ping功能，填入1启用，留空或者不为1则不启用 | 留空 |
 | `MONGODB_URL` | MongoDB连接地址 | `mongodb://mongodb:27017` |
 | `MONGODB_NAME` | MongoDB数据库名称 | `hi2chatbot` |
 | `UPTIME_KUMA_PUSH_URL` | Uptime Kuma推送URL | - |
+| `CAPTCHA_ENABLED` | 是否启用人机验证功能，填入1启用 | `0`（不启用） |
+| `CAPTCHA_MAX_RETRIES` | 验证码最大重试次数 | `3` |
+| `CAPTCHA_FAIL_ACTION` | 验证失败后动作（ban拉黑/block仅禁止） | `ban` |
+| `CAPTCHA_TIMEOUT` | 验证码有效期（单位：秒） | `180`（3分钟） |
 | `AI_AUDIT_ENABLED` | 是否启用AI审核功能，填入1启用 | `0`（不启用） |
 | `AI_AUDIT_COUNT` | 需要审核的消息次数 | `1` |
 | `AI_AUDIT_PROMPT_FILE` | AI审核提示词文件路径，为空则使用默认提示词 | 无 |
@@ -219,6 +240,48 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 | `LOG_FILE_PATH` | 日志文件路径，为空则只输出到控制台 | 无 |
 | `LOG_MAX_SIZE` | 日志文件最大大小（单位：MB），超过后自动轮转 | `10` |
 | `TZ` | 时区设置 | `Asia/Hong_Kong` |
+
+## 人机验证功能说明
+
+- 人机验证功能可以在新用户首次发送消息时，要求用户完成图形验证码验证，验证通过后才能正常发送消息。
+- 验证码支持两种类型：数字字母混合验证码和算术题验证码，随机生成。
+
+### 功能特点
+- **图形验证码**：基于 @napi-rs/canvas 生成验证码图片，支持 node:20-alpine 环境
+- **双类型验证**：随机生成字符验证码（数字+字母）或算术题验证码
+- **重试机制**：支持配置最大重试次数，超过后可选择拉黑或仅禁止发消息
+- **有效期控制**：验证码支持自定义有效期，默认3分钟
+- **友好提示**：验证失败时提供剩余次数提示，支持重新生成验证码
+- **与AI审核协同**：可与AI审核功能同时启用，先验证码验证，再AI审核
+
+### 配置方法
+1. 在环境变量中设置 `CAPTCHA_ENABLED=1` 启用功能
+2. （可选）配置 `CAPTCHA_MAX_RETRIES` 设置最大重试次数，默认为3次
+3. （可选）配置 `CAPTCHA_FAIL_ACTION` 设置失败后动作：
+   - `ban`：拉黑用户（默认）
+   - `block`：仅禁止发消息，不拉黑
+4. （可选）配置 `CAPTCHA_TIMEOUT` 设置验证码有效期（秒），默认180秒（3分钟）
+
+### 使用说明
+- 新用户首次发送消息时会自动收到验证码图片，触发验证的消息会被保存
+- 用户需要回复验证码答案以完成验证
+- 验证码分为两种类型，随机生成：
+  - **字符验证码**：4位数字+字母混合，不区分大小写
+  - **算术题**：简单的加减乘法，需回复计算结果
+- 使用 `/newcaptcha` 指令可以重新获取验证码
+  - 第一次刷新：立即生成新验证码
+  - 第二次及以后：需要等待10秒
+  - 连续刷新10次：自动拉黑（疑似机器人）
+- 管理员使用 `/init` 指令可以重置用户的验证和审核状态
+- 验证通过后，系统会自动转发触发验证的原始消息，用户可以正常发送消息，如启用AI审核则进入AI审核流程
+
+### 验证流程
+1. 新用户发送消息 → 系统保存消息并发送验证码图片
+2. 用户回复验证码答案
+3. 验证成功 → 自动转发原始消息给管理员 → 用户可正常发送消息（如启用AI审核则继续审核）
+4. 验证失败 → 提示剩余次数，可使用 `/newcaptcha` 重新获取
+5. 超过最大重试次数 → 根据配置拉黑或禁止发消息
+6. 频繁刷新验证码（10次）→ 自动拉黑（疑似机器人）
 
 ## AI审核功能说明
 
@@ -261,7 +324,7 @@ environment:
 - 新用户必须先发送纯文本消息通过审核，不能一上来就发送图片、视频等媒体内容
 - 如果新用户发送媒体内容，会收到提示信息，不会转发给机器人所有者
 - 通过所有审核的用户后续消息不再审核，可正常发送任何类型的消息
-- 使用 `/initaudit` 指令可以重置用户的审核状态
+- 使用 `/init` 指令可以重置用户的验证和审核状态
 - 使用 `/banlist` 指令可以查看被AI拉黑的用户列表
 - 使用 `/test {测试文本}` 指令可以测试AI审核功能是否正常，验证大模型对特定文本的判定结果
 

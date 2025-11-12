@@ -120,6 +120,90 @@ class UserService {
       return false;
     }
   }
+
+  /**
+   * 检查用户是否需要验证码验证
+   * @param {number} userId 用户ID
+   * @returns {Promise<boolean>}
+   */
+  async needsCaptcha(userId) {
+    try {
+      const userModel = new models.User();
+      const user = await userModel.findOne({ userId });
+
+      if (!user) {
+        // 新用户需要验证
+        return true;
+      }
+
+      // 如果已经通过验证，不需要再验证
+      return !user.isCaptchaPassed;
+    } catch (error) {
+      console.error('检查验证码状态失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 重置用户验证码状态
+   * @param {number} userId 用户ID
+   * @param {string} nickname 用户昵称（可选）
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async resetCaptchaStatus(userId, nickname = '') {
+    try {
+      const userModel = new models.User();
+      const user = await userModel.findOne({ userId });
+
+      if (!user) {
+        // 如果用户不存在，创建一个新用户（初始状态就是待验证）
+        await userModel.create({
+          userId,
+          nickname,
+        });
+        return {
+          success: true,
+          message: '用户不存在，已创建新用户记录并初始化验证码状态',
+        };
+      }
+
+      await userModel.resetCaptchaStatus(userId);
+
+      return {
+        success: true,
+        message: '重置验证码状态成功',
+      };
+    } catch (error) {
+      console.error('重置验证码状态失败:', error);
+      return {
+        success: false,
+        message: `重置失败: ${error.message}`,
+      };
+    }
+  }
+
+  /**
+   * 设置用户验证码通过状态
+   * @param {number} userId 用户ID
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async setCaptchaPassed(userId) {
+    try {
+      const userModel = new models.User();
+      await userModel.setCaptchaPassed(userId, true);
+
+      return {
+        success: true,
+        message: '设置验证码通过状态成功',
+      };
+    } catch (error) {
+      console.error('设置验证码通过状态失败:', error);
+      return {
+        success: false,
+        message: `设置失败: ${error.message}`,
+      };
+    }
+  }
 }
 
 export default UserService;

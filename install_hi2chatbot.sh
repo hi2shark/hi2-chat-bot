@@ -88,6 +88,7 @@ get_current_config() {
   if [ -f "$ENV_FILE" ]; then
     CURRENT_BOT_TOKEN=$(grep "^TELEGRAM_BOT_TOKEN=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_CHAT_ID=$(grep "^MY_CHAT_ID=" "$ENV_FILE" | cut -d'=' -f2)
+    CURRENT_CAPTCHA_ENABLED=$(grep "^CAPTCHA_ENABLED=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_AI_ENABLED=$(grep "^AI_AUDIT_ENABLED=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_AI_NOTIFY=$(grep "^AI_AUDIT_NOTIFY_USER=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_OPENAI_KEY=$(grep "^OPENAI_API_KEY=" "$ENV_FILE" | cut -d'=' -f2)
@@ -120,7 +121,8 @@ setup_project() {
     print_message "当前配置:"
     echo "  Telegram Bot Token: ${CURRENT_BOT_TOKEN:-未设置}"
     echo "  Chat ID: ${CURRENT_CHAT_ID:-未设置}"
-    echo "  AI审核: ${CURRENT_AI_ENABLED:-未启用}"
+    echo "  人机验证: $([ "$CURRENT_CAPTCHA_ENABLED" = "1" ] && echo "已启用" || echo "未启用")"
+    echo "  AI审核: $([ "$CURRENT_AI_ENABLED" = "1" ] && echo "已启用" || echo "未启用")"
     echo "  日志文件: $([ -n "$CURRENT_LOG_PATH" ] && echo "已启用 (最大: ${CURRENT_LOG_MAX_SIZE:-10}MB)" || echo "未启用")"
     
     print_message "是否要修改现有配置? (y/n):"
@@ -161,6 +163,43 @@ setup_project() {
     if [ -z "$CHAT_ID" ] && [ -n "$CURRENT_CHAT_ID" ]; then
       CHAT_ID="$CURRENT_CHAT_ID"
       print_message "使用当前值"
+    fi
+    
+    # 询问是否启用人机验证
+    print_message "是否启用人机验证功能? (y/n):"
+    if [ -n "$CURRENT_CAPTCHA_ENABLED" ]; then
+      print_message "当前状态: $([ "$CURRENT_CAPTCHA_ENABLED" = "1" ] && echo "已启用" || echo "未启用")"
+    fi
+    read -p "> " ENABLE_CAPTCHA
+    
+    CAPTCHA_ENABLED="0"
+    CAPTCHA_MAX_RETRIES="3"
+    CAPTCHA_FAIL_ACTION="ban"
+    CAPTCHA_TIMEOUT="180"
+    
+    if [[ "$ENABLE_CAPTCHA" == "y" || "$ENABLE_CAPTCHA" == "Y" ]]; then
+      CAPTCHA_ENABLED="1"
+      
+      # 获取最大重试次数 (可选)
+      print_message "请输入验证码最大重试次数 (直接回车使用默认: 3):"
+      read -p "> " CAPTCHA_RETRIES_INPUT
+      if [ -n "$CAPTCHA_RETRIES_INPUT" ]; then
+        CAPTCHA_MAX_RETRIES="$CAPTCHA_RETRIES_INPUT"
+      fi
+      
+      # 获取失败动作 (可选)
+      print_message "验证失败后的动作 (ban=拉黑, block=仅禁止, 直接回车使用默认: ban):"
+      read -p "> " CAPTCHA_ACTION_INPUT
+      if [ -n "$CAPTCHA_ACTION_INPUT" ]; then
+        CAPTCHA_FAIL_ACTION="$CAPTCHA_ACTION_INPUT"
+      fi
+      
+      # 获取验证码有效期 (可选)
+      print_message "请输入验证码有效期（秒） (直接回车使用默认: 180秒=3分钟):"
+      read -p "> " CAPTCHA_TIMEOUT_INPUT
+      if [ -n "$CAPTCHA_TIMEOUT_INPUT" ]; then
+        CAPTCHA_TIMEOUT="$CAPTCHA_TIMEOUT_INPUT"
+      fi
     fi
     
     # 询问是否启用AI审核
@@ -274,7 +313,14 @@ MONGODB_NAME=hi2chatbot
 ALLOW_EDIT=0
 MESSAGE_CLEAR_HOURS=720
 HIDE_START_MESSAGE=0
+ENABLE_DC_PING=0
 TZ=Asia/Hong_Kong
+
+# 人机验证配置
+CAPTCHA_ENABLED=$CAPTCHA_ENABLED
+CAPTCHA_MAX_RETRIES=$CAPTCHA_MAX_RETRIES
+CAPTCHA_FAIL_ACTION=$CAPTCHA_FAIL_ACTION
+CAPTCHA_TIMEOUT=$CAPTCHA_TIMEOUT
 
 # AI审核配置
 AI_AUDIT_ENABLED=$AI_ENABLED
@@ -326,6 +372,7 @@ EOF
     echo "  项目目录: $PROJECT_DIR"
     echo "  Bot Token: ${BOT_TOKEN:0:10}..."
     echo "  Chat ID: ${CHAT_ID:-未设置}"
+    echo "  人机验证: $([ "$CAPTCHA_ENABLED" = "1" ] && echo "已启用" || echo "未启用")"
     echo "  AI审核: $([ "$AI_ENABLED" = "1" ] && echo "已启用" || echo "未启用")"
     echo "  日志文件: $([ -n "$LOG_PATH" ] && echo "已启用 (最大: ${LOG_MAX_SIZE}MB)" || echo "未启用")"
   fi

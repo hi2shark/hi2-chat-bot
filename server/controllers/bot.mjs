@@ -27,6 +27,7 @@ import ChatService from '../services/chat.mjs';
 import BlacklistService from '../services/blacklist.mjs';
 import UserService from '../services/user.mjs';
 import AuditService from '../services/audit.mjs';
+import CaptchaService from '../services/captcha.mjs';
 import TGDCTcping from '../utils/dc-tcping.mjs';
 import logger from '../utils/logger.mjs';
 
@@ -46,6 +47,7 @@ class BotController {
     this.blacklistService = new BlacklistService();
     this.userService = new UserService();
     this.auditService = new AuditService();
+    this.captchaService = new CaptchaService();
 
     this.start();
   }
@@ -380,10 +382,85 @@ ${result.reason}${actionText}
   }
 
   /**
-   * 初始化用户审核状态
+   * 测试验证码功能
    * @param {Object} msg 消息对象
    */
-  async initAudit(msg) {
+  async testCaptcha(msg) {
+    // 检查验证码功能是否启用
+    if (!this.captchaService.isEnabled()) {
+      this.bot.sendMessage(
+        this.myChatId,
+        '❌ 人机验证功能未启用\n请在环境变量中设置 CAPTCHA_ENABLED=1',
+      );
+      return;
+    }
+
+    // 发送处理中的提示
+    const processingMsg = await this.bot.sendMessage(
+      this.myChatId,
+      '🔐 正在生成测试验证码...',
+    );
+
+    try {
+      // 生成测试验证码（使用管理员ID + 时间戳避免冲突）
+      const testUserId = `test_${this.myChatId}_${Date.now()}`;
+      const startTime = Date.now();
+      const captchaData = await this.captchaService.createCaptcha(testUserId);
+      const elapsedTime = Date.now() - startTime;
+
+      const typeText = captchaData.type === 'text' ? '字符验证码' : '算术题验证码';
+
+      // 删除提示消息
+      await this.bot.deleteMessage(this.myChatId, processingMsg.message_id);
+
+      // 发送验证码图片
+      await this.bot.sendPhoto(
+        this.myChatId,
+        captchaData.image,
+        {
+          caption: `✅ <b>验证码测试</b>
+
+<b>📋 验证码类型</b>: ${typeText}
+<b>⏱️ 生成耗时</b>: ${elapsedTime}ms
+<b>⏰ 有效期</b>: ${this.captchaService.timeout}秒
+<b>🔄 最大重试次数</b>: ${this.captchaService.getMaxRetries()}次
+<b>❌ 失败动作</b>: ${this.captchaService.getFailAction() === 'ban' ? '拉黑用户' : '仅禁止发消息'}
+
+<i>这是测试验证码，用于检查验证码生成功能是否正常</i>`,
+          parse_mode: 'HTML',
+        },
+        {
+          filename: 'captcha.png',
+          contentType: 'image/png',
+        },
+      );
+
+      // 清理测试验证码记录
+      const models = (await import('../models/index.mjs')).default;
+      const captchaModel = new models.Captcha();
+      await captchaModel.deleteByUserId(testUserId);
+
+      logger.log(`🧪 验证码测试: 类型=${typeText} | 耗时: ${elapsedTime}ms`);
+    } catch (error) {
+      logger.error('验证码测试失败:', error);
+
+      // 更新消息显示错误
+      await this.bot.editMessageText(
+        `❌ <b>验证码测试失败</b>\n\n<b>错误信息</b>: ${error.message}\n\n请检查：\n• canvas 库是否正确安装\n• 系统环境是否支持图片生成`,
+        {
+          chat_id: this.myChatId,
+          message_id: processingMsg.message_id,
+          parse_mode: 'HTML',
+        },
+      );
+    }
+  }
+
+  /**
+   * 初始化用户状态（重置审核和验证码）
+   * @param {Object} msg 消息对象
+   */
+  async initUser(msg) {
     let userId;
     let nickname = '';
 
@@ -399,7 +476,7 @@ ${result.reason}${actionText}
       if (!userIdStr) {
         this.bot.sendMessage(
           this.myChatId,
-          '❌ 请回复要初始化审核的用户消息，或使用 <code>/initaudit {userId}</code>',
+          '❌ 请回复要初始化的用户消息，或使用 <code>/init {userId}</code>',
           { parse_mode: 'HTML' },
         );
         return;
@@ -413,7 +490,7 @@ ${result.reason}${actionText}
     }
 
     if (userId === this.myChatId) {
-      this.bot.sendMessage(this.myChatId, '❌ 不能初始化管理员的审核状态');
+      this.bot.sendMessage(this.myChatId, '❌ 不能初始化管理员的状态');
       return;
     }
 
@@ -427,21 +504,159 @@ ${result.reason}${actionText}
       }
     }
 
-    // 重置用户审核状态
-    const result = await this.userService.resetAuditStatus(userId, nickname);
+    // 删除现有的验证码记录
+    const models = (await import('../models/index.mjs')).default;
+    const captchaModel = new models.Captcha();
+    await captchaModel.deleteByUserId(userId);
 
-    if (result.success) {
-      const userInfo = nickname ? ` (${nickname})` : '';
-      this.bot.sendMessage(
-        this.myChatId,
-        `✅ 已重置用户 <code>${userId}</code>${userInfo} 的审核状态\n${unbanMessage}${result.message}\n下次发送消息时将重新触发AI审核`,
-        { parse_mode: 'HTML' },
+    // 重置用户验证码状态
+    const captchaResult = await this.userService.resetCaptchaStatus(userId, nickname);
+
+    // 重置用户审核状态
+    const auditResult = await this.userService.resetAuditStatus(userId, nickname);
+
+    const userInfo = nickname ? ` (${nickname})` : '';
+    const statusMessages = [];
+
+    if (this.captchaService.isEnabled()) {
+      statusMessages.push(captchaResult.success ? '验证码状态已重置' : `验证码重置失败: ${captchaResult.message}`);
+    }
+
+    if (this.auditService.isEnabled()) {
+      statusMessages.push(auditResult.success ? 'AI审核状态已重置' : `审核重置失败: ${auditResult.message}`);
+    }
+
+    if (statusMessages.length === 0) {
+      statusMessages.push('状态已重置（当前未启用验证码和AI审核功能）');
+    }
+
+    const message = `✅ 已初始化用户 <code>${userId}</code>${userInfo}\n${unbanMessage}${statusMessages.join('\n')}\n\n下次发送消息时将重新触发验证流程`;
+
+    this.bot.sendMessage(this.myChatId, message, { parse_mode: 'HTML' });
+  }
+
+  /**
+   * 重新生成验证码
+   * @param {Object} msg 消息对象
+   */
+  async newCaptcha(msg) {
+    const userId = msg.from.id;
+
+    // 只允许普通用户使用此命令
+    if (userId === this.myChatId) {
+      return;
+    }
+
+    // 检查是否在黑名单中
+    const blacklistResult = await this.blacklistService.check(userId);
+    if (blacklistResult.success) {
+      logger.log(`🚫 黑名单用户 ${userId} 尝试刷新验证码`);
+      return;
+    }
+
+    // 检查是否启用验证码功能
+    if (!this.captchaService.isEnabled()) {
+      return;
+    }
+
+    // 检查用户是否需要验证
+    const needsCaptcha = await this.userService.needsCaptcha(userId);
+    if (!needsCaptcha) {
+      try {
+        await this.bot.sendMessage(
+          userId,
+          '✅ 您已完成验证，无需重新获取验证码。',
+        );
+      } catch (error) {
+        logger.error('发送消息失败:', error);
+      }
+      return;
+    }
+
+    // 检查刷新频率限制
+    try {
+      const models = (await import('../models/index.mjs')).default;
+      const captchaModel = new models.Captcha();
+      const existingCaptcha = await captchaModel.getValidCaptcha(userId);
+
+      if (existingCaptcha) {
+        const refreshCount = existingCaptcha.refreshCount || 0;
+        const lastRefreshAt = existingCaptcha.lastRefreshAt || existingCaptcha.createdAt;
+        const timeSinceLastRefresh = (Date.now() - new Date(lastRefreshAt).getTime()) / 1000;
+
+        // 第二次及以后的刷新需要等待10秒
+        if (refreshCount > 0 && timeSinceLastRefresh < 10) {
+          const waitTime = Math.ceil(10 - timeSinceLastRefresh);
+          try {
+            await this.bot.sendMessage(
+              userId,
+              `⏰ 请等待 ${waitTime} 秒后再重新获取验证码。\n\n剩余刷新次数: ${Math.max(0, 9 - refreshCount)}`,
+            );
+          } catch (error) {
+            logger.error('发送等待提示失败:', error);
+          }
+          return;
+        }
+
+        // 增加刷新次数
+        await captchaModel.incrementRefreshCount(userId);
+
+        // 检查增加后是否达到拉黑阈值（连续刷新10次）
+        const updatedCaptcha = await captchaModel.getValidCaptcha(userId);
+        const newRefreshCount = updatedCaptcha?.refreshCount || 0;
+
+        if (newRefreshCount >= 10) {
+          const nickname = msg.from.first_name || msg.from.username || '';
+          const remark = '验证码刷新次数过多（疑似机器人）';
+          await this.blacklistService.add(userId, nickname, remark);
+          await captchaModel.deleteByUserId(userId);
+
+          try {
+            await this.bot.sendMessage(
+              userId,
+              `❌ 您因频繁刷新验证码已被拉黑。\n\n您的ID是<code>${userId}</code>`,
+              { parse_mode: 'HTML' },
+            );
+          } catch (error) {
+            logger.error('发送拉黑通知失败:', error);
+          }
+
+          logger.log(`🚫 用户 ${userId} 因频繁刷新验证码被拉黑 (刷新${newRefreshCount}次)`);
+          return;
+        }
+      }
+    } catch (error) {
+      logger.error('检查刷新频率失败:', error);
+    }
+
+    // 生成并发送新验证码
+    try {
+      const captchaData = await this.captchaService.createCaptcha(userId, true);
+      const typeText = captchaData.type === 'text' ? '字符验证码' : '算术题';
+
+      await this.bot.sendPhoto(
+        userId,
+        captchaData.image,
+        {
+          caption: `🔐 请完成人机验证\n\n请输入图片中的${typeText}答案\n验证码有效期: ${this.captchaService.timeout}秒\n\n如需重新获取验证码，请发送 /newcaptcha`,
+        },
+        {
+          filename: 'captcha.png',
+          contentType: 'image/png',
+        },
       );
-    } else {
-      this.bot.sendMessage(
-        this.myChatId,
-        `❌ 初始化审核状态失败: ${result.message}`,
-      );
+
+      logger.log(`🔄 用户 ${userId} 重新获取验证码`);
+    } catch (error) {
+      logger.error('发送验证码失败:', error);
+      try {
+        await this.bot.sendMessage(
+          userId,
+          '❌ 生成验证码失败，请稍后重试。',
+        );
+      } catch (sendError) {
+        logger.error('发送错误消息失败:', sendError);
+      }
     }
   }
 
@@ -487,16 +702,22 @@ ${result.reason}${actionText}
   使用方式：<code>/bansearch {关键词}</code>
   说明：根据用户ID、昵称或备注搜索黑名单记录
 
-<b>🤖 AI审核管理</b>
-• <code>/initaudit</code> - 初始化用户审核状态
+<b>🔐 用户状态管理</b>
+• <code>/init</code> - 初始化用户状态
   使用方式：
-  - 回复用户消息后发送 <code>/initaudit</code>
-  - 或直接发送 <code>/initaudit {userId}</code>
-  说明：重置用户审核状态，下次发送消息时将重新触发AI审核
+  - 回复用户消息后发送 <code>/init</code>
+  - 或直接发送 <code>/init {userId}</code>
+  说明：重置用户的验证码和AI审核状态，同时自动解除黑名单
+
+• <code>/newcaptcha</code> - 重新获取验证码
+  说明：用户在验证过程中可使用此指令重新生成验证码
 
 • <code>/test</code> - 测试AI审核功能
   使用方式：<code>/test {测试文本}</code>
   说明：验证大模型对特定文本的判定结果，检查AI审核是否正常工作
+
+• <code>/testcaptcha</code> - 测试验证码功能
+  说明：生成测试验证码图片，检查验证码生成功能是否正常
 
 <b>📊 统计与信息</b>
 • <code>/stats</code> - 获取用户聊天统计信息
@@ -513,7 +734,7 @@ ${result.reason}${actionText}
 
 <b>💡 提示</b>
 - 所有管理指令仅机器人所有者可用
-- AI审核功能需在环境变量中启用
+- 人机验证和AI审核功能需在环境变量中启用
 - 被拉黑的用户发送的消息不会被转发`;
 
     await this.bot.sendMessage(this.myChatId, helpText, { parse_mode: 'HTML' });
@@ -541,12 +762,14 @@ ${result.reason}${actionText}
           await this.bansearch(msg);
           break;
         case '/init':
-        case '/initaudit':
-          await this.initAudit(msg);
+          await this.initUser(msg);
           break;
         case '/test':
         case '/testaudit':
           await this.testAudit(msg);
+          break;
+        case '/testcaptcha':
+          await this.testCaptcha(msg);
           break;
         case '/stats':
           await this.handleUserStats(msg);
@@ -621,9 +844,131 @@ ${result.reason}${actionText}
         await this.chatService.replyMessage(msg);
       }
     } else {
+      const userId = msg.from.id;
+
+      // 人机验证流程（仅对非管理员的普通用户）
+      if (this.captchaService.isEnabled()) {
+        const needsCaptcha = await this.userService.needsCaptcha(userId);
+
+        if (needsCaptcha) {
+          // 检查用户是否在验证过程中（有待验证的验证码）
+          const models = (await import('../models/index.mjs')).default;
+          const captchaModel = new models.Captcha();
+          const existingCaptcha = await captchaModel.getValidCaptcha(userId);
+
+          if (existingCaptcha) {
+            // 用户已经有验证码，验证用户输入
+            const userInput = msg.text || '';
+
+            if (userInput.trim().length === 0) {
+              // 用户发送的不是文本消息，提示需要回复验证码
+              try {
+                await this.bot.sendMessage(
+                  userId,
+                  '⚠️ 请回复验证码以完成验证。如需重新获取验证码，请发送 /newcaptcha',
+                );
+              } catch (error) {
+                logger.error('发送提示消息失败:', error);
+              }
+              return;
+            }
+
+            // 验证验证码
+            const verifyResult = await this.captchaService.verifyCaptcha(userId, userInput);
+
+            if (verifyResult.success) {
+              // 验证成功，设置用户验证通过状态
+              await this.userService.setCaptchaPassed(userId);
+
+              try {
+                await this.bot.sendMessage(
+                  userId,
+                  '✅ 验证成功！',
+                );
+              } catch (error) {
+                logger.error('发送验证成功消息失败:', error);
+              }
+
+              // 转发触发验证的原始消息
+              if (existingCaptcha.triggerMessage) {
+                try {
+                  logger.log(`📤 转发用户 ${userId} 验证前的消息`);
+                  // 使用存储的消息信息转发
+                  await this.chatService.forwardMessage(existingCaptcha.triggerMessage);
+                } catch (error) {
+                  logger.error('转发触发消息失败:', error);
+                }
+              }
+
+              // 不转发这条验证码消息，直接返回
+              return;
+            }
+
+            // 验证失败
+            if (verifyResult.shouldBan) {
+              // 需要拉黑用户
+              const nickname = msg.from.first_name || msg.from.username || '';
+              const remark = '验证码验证失败次数过多';
+              await this.blacklistService.add(userId, nickname, remark);
+
+              try {
+                await this.bot.sendMessage(
+                  userId,
+                  `❌ ${verifyResult.message}\n\n您的ID是<code>${userId}</code>`,
+                  { parse_mode: 'HTML' },
+                );
+              } catch (error) {
+                logger.error('发送拉黑通知失败:', error);
+              }
+
+              logger.log(`🚫 用户 ${userId} 验证码验证失败次数过多，已拉黑`);
+            } else {
+              // 继续重试
+              try {
+                await this.bot.sendMessage(
+                  userId,
+                  `❌ ${verifyResult.message}\n\n如需重新获取验证码，请发送 /newcaptcha`,
+                );
+              } catch (error) {
+                logger.error('发送验证失败消息失败:', error);
+              }
+            }
+
+            return;
+          }
+
+          // 用户还没有验证码，生成并发送验证码
+          try {
+            const captchaData = await this.captchaService.createCaptcha(userId);
+            const typeText = captchaData.type === 'text' ? '字符验证码' : '算术题';
+
+            // 保存触发验证的消息
+            await captchaModel.saveTriggerMessage(userId, msg);
+
+            await this.bot.sendPhoto(
+              userId,
+              captchaData.image,
+              {
+                caption: `🔐 请完成人机验证\n\n请输入图片中的${typeText}答案\n验证码有效期: ${this.captchaService.timeout}秒\n\n如需重新获取验证码，请发送 /newcaptcha`,
+              },
+              {
+                filename: 'captcha.png',
+                contentType: 'image/png',
+              },
+            );
+
+            logger.log(`📤 已向用户 ${userId} 发送验证码`);
+          } catch (error) {
+            logger.error('发送验证码失败:', error);
+          }
+
+          // 不转发这条消息，直接返回
+          return;
+        }
+      }
+
       // AI审核流程（仅对非管理员的普通用户）
       if (this.auditService.isEnabled()) {
-        const userId = msg.from.id;
         const auditCount = this.auditService.getAuditCount();
 
         // 检查用户是否需要审核
@@ -1033,13 +1378,30 @@ ${result.reason}${actionText}
 
     if (process.env.HIDE_START_MESSAGE !== '1') {
       // 启动成功后通知管理员
+      const features = [];
+      if (this.auditService.enabled) {
+        features.push('🤖 <b>AI审核</b>: ✅ 已启用');
+      }
+      if (this.captchaService.enabled) {
+        features.push('🔐 <b>人机验证</b>: ✅ 已启用');
+      }
+
+      const featuresText = features.length > 0 ? `\n${features.join('\n')}` : '';
+
       this.bot.sendMessage(
         this.myChatId,
-        `✨🤖✨🤖✨🤖✨\n ChatBot启动成功\n当前时间：${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
+        `✨🤖✨🤖✨🤖✨
+<b>ChatBot启动成功</b>
+⏰ <b>启动时间</b>: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}${featuresText}`,
+        { parse_mode: 'HTML' },
       ).catch((error) => {
         logger.error('发送启动消息失败:', error);
       });
-      this.dcPing();
+
+      // 根据环境变量决定是否执行 dcPing
+      if (process.env.ENABLE_DC_PING === '1') {
+        this.dcPing();
+      }
     }
     // 自动清除消息历史
     this.chatService.autoClearMessageHistory();
@@ -1051,6 +1413,14 @@ ${result.reason}${actionText}
    */
   async handleMessage(msg) {
     if (msg.text && msg.text.startsWith('/')) {
+      const command = msg.text.split(' ')[0].split('@')[0];
+
+      // /newcaptcha 指令可以被普通用户使用
+      if (command === '/newcaptcha' && msg.chat.type === 'private') {
+        await this.newCaptcha(msg);
+        return;
+      }
+
       await this.handleCommand(msg);
       return;
     }
