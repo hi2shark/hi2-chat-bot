@@ -50,3 +50,23 @@ jobs:
         docker push ghcr.io/${{ github.repository }}:$VERSION
         docker tag ghcr.io/${{ github.repository }}:$VERSION ghcr.io/${{ github.repository }}:latest
         docker push ghcr.io/${{ github.repository }}:latest
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ env.VERSION }}
+        body: |
+          ## 更新内容
+          - Docker 镜像版本: `${{ env.VERSION }}`
+          - Docker 镜像地址: `ghcr.io/${{ github.repository }}:${{ env.VERSION }}`
+          
+          ## 使用方法
+          ```bash
+          docker pull ghcr.io/${{ github.repository }}:${{ env.VERSION }}
+          ```
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
