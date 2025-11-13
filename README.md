@@ -244,48 +244,7 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 | `LOG_MAX_SIZE` | 日志文件最大大小（单位：MB），超过后自动轮转 | `10` |
 | `TZ` | 时区设置 | `Asia/Hong_Kong` |
 
-```bash
-AI_AUDIT_ENABLED=1             # 启用AI审核
-AI_AUDIT_COUNT=1               # 审核前N条消息
-AI_AUDIT_NOTIFY_USER=0         # 是否通知被拉黑用户
-OPENAI_API_KEY=your_key
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-3.5-turbo
-```
-
-- 新用户前N条消息必须为纯文本（不能包含图片/视频）
-- 检测到广告自动拉黑，备注标明"AI自动拉黑-广告"
-- 通过审核后可正常发送任何类型消息
-
-### 日志管理
-
-支持日志文件输出和自动轮转。
-
-```bash
-LOG_FILE_PATH=/app/logs/chatbot.log  # 日志路径
-LOG_MAX_SIZE=10                      # 最大10MB自动轮转
-```
-
-## 主要环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `TELEGRAM_BOT_TOKEN` | 机器人Token | 必填 |
-| `MY_CHAT_ID` | 管理员ChatID（支持群组） | 必填 |
-| `ALLOW_EDIT` | 允许编辑消息 | `0` |
-| `MESSAGE_CLEAR_HOURS` | 消息记录清理时间（小时） | `720` |
-| `MONGODB_URL` | MongoDB连接地址 | `mongodb://mongodb:27017` |
-| `UPTIME_KUMA_PUSH_URL` | Uptime Kuma监控URL | - |
-
 完整环境变量说明见 `.env.example` 文件。
-
-## 使用须知
-
-- 只转发私聊消息，不转发群聊消息
-- 转发到群聊需先将机器人拉入群组
-- 撤回消息通过 `/del` 指令执行
-- 无法撤回或编辑48小时前的消息
-- 媒体消息编辑失败时会先删除再重发
 
 ## 更新日志
 
