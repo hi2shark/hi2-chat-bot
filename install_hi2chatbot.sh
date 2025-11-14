@@ -179,6 +179,7 @@ setup_project() {
     
     if [[ "$ENABLE_CAPTCHA" == "y" || "$ENABLE_CAPTCHA" == "Y" ]]; then
       CAPTCHA_ENABLED="1"
+      print_success "人机验证已启用"
       
       # 获取最大重试次数 (可选)
       print_message "请输入验证码最大重试次数 (直接回车使用默认: 3):"
@@ -218,6 +219,13 @@ setup_project() {
     
     if [[ "$ENABLE_AI" == "y" || "$ENABLE_AI" == "Y" ]]; then
       AI_ENABLED="1"
+      print_success "AI审核已启用"
+      
+      # 如果人机验证也启用了，提示智能审核模式
+      if [ "$CAPTCHA_ENABLED" = "1" ]; then
+        print_message "检测到人机验证和AI审核同时启用，将自动开启智能审核模式！"
+        print_message "智能模式下，AI会区分：广告（拉黑）、无意义内容（人机验证）、正常内容（计入审核）"
+      fi
       
       # 获取OpenAI API Key
       print_message "请输入OpenAI API Key:"

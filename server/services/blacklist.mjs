@@ -125,10 +125,10 @@ class BlacklistService {
 
     // 尝试作为数字ID搜索
     const chatIdNumber = parseInt(trimmedKeyword, 10);
-    
+
     // 构建查询条件：匹配 chatId 或 nickname 或 remark
-    let results = [];
-    
+    const results = [];
+
     try {
       // 如果是有效的数字，搜索 chatId
       if (!Number.isNaN(chatIdNumber)) {
@@ -141,7 +141,7 @@ class BlacklistService {
       // 搜索昵称和备注（使用正则表达式进行模糊匹配）
       const { collection } = await blacklistModel.connect();
       const regex = new RegExp(trimmedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      
+
       const textMatches = await collection.find({
         $or: [
           { nickname: { $regex: regex } },

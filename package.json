@@ -1,12 +1,14 @@
 {
   "name": "hi2-chat-bot",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "TG私聊机器人",
   "main": "index.mjs",
   "type": "module",
   "scripts": {
     "start": "cross-env NODE_ENV=production node index.mjs",
-    "dev": "cross-env NODE_ENV=development node index.mjs"
+    "dev": "cross-env NODE_ENV=development node index.mjs",
+    "lint": "eslint . --ext .mjs,.js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .mjs,.js,.jsx,.ts,.tsx --fix"
   },
   "keywords": [],
   "author": "hi2hi",

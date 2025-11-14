@@ -51,6 +51,103 @@ jobs:
         docker tag ghcr.io/${{ github.repository }}:$VERSION ghcr.io/${{ github.repository }}:latest
         docker push ghcr.io/${{ github.repository }}:latest
 
+    - name: Get previous tag
+      id: get_previous_tag
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        git fetch --tags
+        PREVIOUS_TAG=$(git tag -l "v*.*.*" --sort=-v:refname | head -n 2 | tail -n 1)
+        echo "PREVIOUS_TAG=$PREVIOUS_TAG" >> $GITHUB_ENV
+        echo "Previous tag: $PREVIOUS_TAG"
+        echo "Current tag: ${{ github.ref_name }}"
+
+    - name: Generate changelog
+      id: generate_changelog
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        # Get commits between tags
+        if [ -z "$PREVIOUS_TAG" ]; then
+          COMMITS=$(git log ${{ github.ref_name }} --pretty=format:"%h|%s")
+        else
+          COMMITS=$(git log $PREVIOUS_TAG..${{ github.ref_name }} --pretty=format:"%h|%s")
+        fi
+        
+        # Initialize categories
+        FEAT=""
+        FIX=""
+        DOCS=""
+        REFACTOR=""
+        PERF=""
+        TEST=""
+        CHORE=""
+        OTHER=""
+        
+        # Parse commits and categorize
+        while IFS='|' read -r hash message; do
+          if [[ $message =~ ^feat[:：] ]]; then
+            FEAT="${FEAT}- ${message#*[:：] } (\`$hash\`)\n"
+          elif [[ $message =~ ^fix[:：] ]]; then
+            FIX="${FIX}- ${message#*[:：] } (\`$hash\`)\n"
+          elif [[ $message =~ ^docs[:：] ]]; then
+            DOCS="${DOCS}- ${message#*[:：] } (\`$hash\`)\n"
+          elif [[ $message =~ ^refactor[:：] ]]; then
+            REFACTOR="${REFACTOR}- ${message#*[:：] } (\`$hash\`)\n"
+          elif [[ $message =~ ^perf[:：] ]]; then
+            PERF="${PERF}- ${message#*[:：] } (\`$hash\`)\n"
+          elif [[ $message =~ ^test[:：] ]]; then
+            TEST="${TEST}- ${message#*[:：] } (\`$hash\`)\n"
+          elif [[ $message =~ ^chore[:：] ]]; then
+            CHORE="${CHORE}- ${message#*[:：] } (\`$hash\`)\n"
+          else
+            OTHER="${OTHER}- ${message} (\`$hash\`)\n"
+          fi
+        done <<< "$COMMITS"
+        
+        # Build changelog
+        CHANGELOG=""
+        
+        if [ -n "$FEAT" ]; then
+          CHANGELOG="${CHANGELOG}### ✨ 新功能\n\n${FEAT}\n"
+        fi
+        
+        if [ -n "$FIX" ]; then
+          CHANGELOG="${CHANGELOG}### 🐛 问题修复\n\n${FIX}\n"
+        fi
+        
+        if [ -n "$PERF" ]; then
+          CHANGELOG="${CHANGELOG}### ⚡ 性能优化\n\n${PERF}\n"
+        fi
+        
+        if [ -n "$REFACTOR" ]; then
+          CHANGELOG="${CHANGELOG}### ♻️ 代码重构\n\n${REFACTOR}\n"
+        fi
+        
+        if [ -n "$DOCS" ]; then
+          CHANGELOG="${CHANGELOG}### 📝 文档更新\n\n${DOCS}\n"
+        fi
+        
+        if [ -n "$TEST" ]; then
+          CHANGELOG="${CHANGELOG}### 🧪 测试相关\n\n${TEST}\n"
+        fi
+        
+        if [ -n "$CHORE" ]; then
+          CHANGELOG="${CHANGELOG}### 🔧 其他更改\n\n${CHORE}\n"
+        fi
+        
+        if [ -n "$OTHER" ]; then
+          CHANGELOG="${CHANGELOG}### 📦 其他提交\n\n${OTHER}\n"
+        fi
+        
+        # Save to file to avoid issues with multiline in env
+        echo -e "$CHANGELOG" > changelog.md
+        
+        # Also save to env using delimiter
+        {
+          echo 'CHANGELOG<<EOF'
+          echo -e "$CHANGELOG"
+          echo 'EOF'
+        } >> $GITHUB_ENV
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
@@ -58,15 +155,19 @@ jobs:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ env.VERSION }}
         body: |
-          ## 更新内容
-          - Docker 镜像版本: `${{ env.VERSION }}`
-          - Docker 镜像地址: `ghcr.io/${{ github.repository }}:${{ env.VERSION }}`
+          ## 📋 更新内容
           
-          ## 使用方法
+          ${{ env.CHANGELOG }}
+          
+          ## 🐳 Docker 镜像信息
+          - 镜像版本: `${{ env.VERSION }}`
+          - 镜像地址: `ghcr.io/${{ github.repository }}:${{ env.VERSION }}`
+          
+          ## 📦 使用方法
           ```bash
           docker pull ghcr.io/${{ github.repository }}:${{ env.VERSION }}
           ```
-        draft: false
+        draft: true
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

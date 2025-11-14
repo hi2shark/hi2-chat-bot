@@ -5,7 +5,7 @@ const activeSockets = new Set();
 
 /**
  * 添加socket到活动列表
- * @param {Socket} socket 
+ * @param {Socket} socket
  */
 function trackSocket(socket) {
   activeSockets.add(socket);
@@ -13,7 +13,7 @@ function trackSocket(socket) {
 
 /**
  * 从活动列表移除socket
- * @param {Socket} socket 
+ * @param {Socket} socket
  */
 function untrackSocket(socket) {
   activeSockets.delete(socket);
@@ -24,7 +24,7 @@ function untrackSocket(socket) {
  */
 function cleanupAllSockets() {
   console.log(`正在清理 ${activeSockets.size} 个活动的socket连接...`);
-  for (const socket of activeSockets) {
+  activeSockets.forEach((socket) => {
     try {
       if (!socket.destroyed) {
         socket.removeAllListeners();
@@ -33,7 +33,7 @@ function cleanupAllSockets() {
     } catch (error) {
       console.error('清理socket时出错:', error);
     }
-  }
+  });
   activeSockets.clear();
 }
 
@@ -63,13 +63,13 @@ async function tcpPing(host, port, timeout = 10000) {
     const cleanupSocket = () => {
       if (!isSocketClosed) {
         isSocketClosed = true;
-        
+
         // 清理超时定时器
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
           timeoutHandle = null;
         }
-        
+
         try {
           socket.removeAllListeners();
           if (!socket.destroyed) {
