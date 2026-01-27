@@ -37,11 +37,16 @@ const currentDirPath = dirname(currentFilePath);
 const packageJson = JSON.parse(readFileSync(join(currentDirPath, '../../package.json'), 'utf-8'));
 const APP_VERSION = packageJson.version;
 
+const POLLING_RESTART_COOLDOWN_MS = 60000; // 60 秒内不重复重启
+const POLLING_RESTART_DELAY_MS = 5000;
+
 class BotController {
   constructor(bot, myChatId, processMonitor = null) {
     this.bot = bot;
     this.myChatId = myChatId;
     this.processMonitor = processMonitor;
+    this.lastPollingRestartAt = 0;
+    this.pollingRestartTimer = null;
 
     this.chatService = new ChatService(this.bot, this.myChatId);
     this.blacklistService = new BlacklistService();
@@ -1405,6 +1410,40 @@ ${result.reason}${actionText}
   }
 
   /**
+   * polling_error 时自动重启轮询，带冷却避免短时间反复重启
+   * @param {Error} error 轮询错误对象
+   */
+  handlePollingError(error) {
+    const now = Date.now();
+    if (now - this.lastPollingRestartAt < POLLING_RESTART_COOLDOWN_MS) {
+      logger.warn('Polling 重启冷却中，跳过本次重启');
+      return;
+    }
+
+    if (this.pollingRestartTimer) {
+      return;
+    }
+
+    logger.log(`Polling 错误触发重启，将在 ${POLLING_RESTART_DELAY_MS / 1000} 秒后执行`);
+    this.bot.stopPolling().catch(() => {});
+
+    this.pollingRestartTimer = setTimeout(() => {
+      this.pollingRestartTimer = null;
+      this.bot.startPolling({ restart: true }).catch((err) => {
+        logger.error('startPolling 失败:', err);
+      });
+      this.lastPollingRestartAt = Date.now();
+      logger.log('Polling 已因错误触发重启');
+      if (this.myChatId) {
+        this.bot.sendMessage(
+          this.myChatId,
+          `⚠️ Telegram Polling 错误已触发自动重启\n错误: ${error?.message || String(error)}\n时间: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
+        ).catch(logger.error);
+      }
+    }, POLLING_RESTART_DELAY_MS);
+  }
+
+  /**
    * 初始化消息处理器
    * @description 注册消息事件监听，分发命令和私聊消息
    */
@@ -1421,6 +1460,7 @@ ${result.reason}${actionText}
 
     this.bot.on('polling_error', (error) => {
       logger.error('Telegram Bot Polling 错误:', error);
+      this.handlePollingError(error);
     });
 
     if (process.env.HIDE_START_MESSAGE !== '1') {
@@ -1488,6 +1528,10 @@ ${result.reason}${actionText}
    * 清理资源
    */
   cleanup() {
+    if (this.pollingRestartTimer) {
+      clearTimeout(this.pollingRestartTimer);
+      this.pollingRestartTimer = null;
+    }
     // 清理Bot事件监听器
     if (this.bot) {
       this.bot.removeAllListeners('message');

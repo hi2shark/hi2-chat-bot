@@ -1,8 +1,10 @@
 /**
  * 上报机器人状态
+ * 可与轮询健康看门狗联动：TG 不健康时本周期不 push，便于 Uptime Kuma 判定为不可用
  */
 
 import tcpPing from './tcping.mjs';
+import { getPollingHealthy } from './polling-watchdog.mjs';
 
 // 全局变量管理定时器
 let reportingInterval = null;
@@ -55,6 +57,11 @@ async function reportStatus(retryCount = 0) {
   const maxRetries = 3;
 
   if (!uptimeKumaUrl) {
+    return;
+  }
+
+  // TG 轮询不健康时不 push，使 Uptime Kuma 能因缺少成功 push 而显示不可用
+  if (!getPollingHealthy()) {
     return;
   }
 

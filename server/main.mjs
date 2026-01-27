@@ -3,6 +3,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import initDatabase from './db/init.mjs';
 import BotController from './controllers/bot.mjs';
 import { startUptimeReporting, stopUptimeReporting } from './utils/uptime.mjs';
+import { startPollingWatchdog, stopPollingWatchdog } from './utils/polling-watchdog.mjs';
 import Base from './models/base.mjs';
 import { cleanupAllSockets } from './utils/tcping.mjs';
 import ProcessMonitor from './utils/process-monitor.mjs';
@@ -27,6 +28,9 @@ function setupGracefulShutdown() {
 
       // 停止状态上报定时器
       stopUptimeReporting();
+
+      // 停止轮询健康看门狗
+      stopPollingWatchdog();
 
       // 停止消息历史清理定时器
       if (botController && botController.chatService) {
@@ -88,6 +92,13 @@ function main() {
   processMonitor.start();
 
   botController = new BotController(bot, parseInt(MY_CHAT_ID, 10), processMonitor);
+
+  // 启动轮询健康看门狗（每 5 分钟用 getMe 探测，超时或失败则重启轮询）
+  startPollingWatchdog(bot, {
+    intervalMs: 5 * 60 * 1000,
+    getMeTimeoutMs: 15000,
+    myChatId: MY_CHAT_ID ? parseInt(MY_CHAT_ID, 10) : undefined,
+  });
 
   // 启动状态上报
   startUptimeReporting();
