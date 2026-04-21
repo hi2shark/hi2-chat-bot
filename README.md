@@ -216,9 +216,27 @@ docker-compose up -d
 ```
 
 ## 一键安装脚本
+
+下载并执行后会进入交互菜单：
+
+| 选项 | 说明 |
+|------|------|
+| **1** | 全新安装或修改配置（生成/更新 `$HOME/hi2-chat-bot/.env` 与 `docker-compose.yml`） |
+| **2** | 仅升级服务：`docker compose pull` 拉取最新镜像后 `docker compose up -d` 重新创建容器，**不修改**现有 `.env` |
+
 ```bash
 wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2chatbot.sh && chmod +x install_hi2chatbot.sh && ./install_hi2chatbot.sh
 ```
+
+已安装过、仅想拉镜像并重启容器时，可直接（非交互）：
+
+```bash
+./install_hi2chatbot.sh upgrade
+# 或
+./install_hi2chatbot.sh --upgrade
+```
+
+要求项目目录已存在且含 `docker-compose.yml`（即至少完成过一次选项 1 的安装）。
 
 ## 特色功能简要说明
 ### 人机验证

@@ -425,6 +425,46 @@ check_and_update_images() {
   fi
 }
 
+# 仅升级服务：拉取 compose 中镜像的最新版本并重新创建容器（不修改 .env）
+upgrade_service() {
+  PROJECT_DIR="$HOME/hi2-chat-bot"
+  COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+
+  if ! command_exists docker; then
+    print_error "未检测到 Docker，请先安装 Docker 或运行完整安装流程。"
+    return 1
+  fi
+
+  if ! docker compose version >/dev/null 2>&1; then
+    print_error "未检测到 Docker Compose，请先安装或运行完整安装流程。"
+    return 1
+  fi
+
+  if [ ! -f "$COMPOSE_FILE" ]; then
+    print_error "未找到 $COMPOSE_FILE，请先完成一键安装生成项目目录与配置。"
+    return 1
+  fi
+
+  cd "$PROJECT_DIR" || return 1
+
+  print_message "服务升级：拉取最新镜像（hi2-chat-bot、MongoDB 等）..."
+  if ! docker compose pull; then
+    print_error "拉取镜像失败，请检查网络与镜像源。"
+    return 1
+  fi
+
+  print_message "正在使用新镜像重新创建并启动容器..."
+  if docker compose up -d; then
+    print_success "服务升级完成。"
+    print_message "当前容器状态:"
+    docker compose ps
+  else
+    print_error "容器启动失败，请检查 Docker 与 compose 配置。"
+    return 1
+  fi
+  return 0
+}
+
 # 启动或重启服务
 manage_service() {
   PROJECT_DIR="$HOME/hi2-chat-bot"
@@ -521,19 +561,53 @@ manage_service() {
 
 # 主函数
 main() {
+  # 非交互：仅升级服务（适合 cron / CI）
+  if [ "${1:-}" = "upgrade" ] || [ "${1:-}" = "--upgrade" ]; then
+    install_docker
+    if upgrade_service; then
+      print_success "升级流程结束。"
+    else
+      exit 1
+    fi
+    return 0
+  fi
+
+  print_message "TG私聊机器人 — 安装脚本"
+  echo ""
+  echo "  1) 全新安装或修改配置（生成/更新 .env 与 docker-compose.yml）"
+  echo "  2) 仅升级服务（拉取最新镜像并重启容器，保留现有 .env）"
+  echo ""
+  read -p "请选择 [1/2] (默认: 1): " MENU_CHOICE
+  MENU_CHOICE=${MENU_CHOICE:-1}
+
+  if [ "$MENU_CHOICE" = "2" ]; then
+    install_docker
+    if upgrade_service; then
+      print_success "配置过程完成！"
+    else
+      exit 1
+    fi
+    return 0
+  fi
+
+  if [ "$MENU_CHOICE" != "1" ]; then
+    print_error "无效选项，请输入 1 或 2。"
+    exit 1
+  fi
+
   print_message "开始安装/配置TG私聊机器人..."
-  
+
   # 安装Docker
   install_docker
-  
+
   # 创建项目目录和配置文件
   setup_project
-  
+
   # 启动或重启服务
   manage_service
-  
+
   print_success "配置过程完成！"
 }
 
 # 执行主函数
-main 
+main "$@" 
