@@ -1434,7 +1434,7 @@ ${result.reason}${actionText}
       });
       this.lastPollingRestartAt = Date.now();
       logger.log('Polling 已因错误触发重启');
-      if (this.myChatId) {
+      if (this.myChatId && process.env.TG_NOTIFY_POLLING_ALERTS === '1') {
         this.bot.sendMessage(
           this.myChatId,
           `⚠️ Telegram Polling 错误已触发自动重启\n错误: ${error?.message || String(error)}\n时间: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,

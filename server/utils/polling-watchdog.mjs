@@ -57,7 +57,7 @@ async function runCheck(bot, options = {}) {
       logger.error('看门狗触发 startPolling 失败:', err);
     });
     logger.log('轮询看门狗: 已触发轮询重启');
-    if (myChatId) {
+    if (myChatId && process.env.TG_NOTIFY_POLLING_ALERTS === '1') {
       bot.sendMessage(
         myChatId,
         '⚠️ 轮询看门狗: getMe 失败或超时，已触发轮询自动重启',

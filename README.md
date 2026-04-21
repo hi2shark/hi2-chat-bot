@@ -4,6 +4,8 @@
 TG私聊机器人可以将发送给机器人的私聊消息转发给您，并允许您回复这些消息。  
 2.0版本升级为数据库版本，精简了机器人消息窗口，增加了消息撤回和黑名单等功能。  
 支持Uptime Kuma健康状态上报，每30秒上报一次，建议健康监听范围值180秒。  
+**2.3.4**版，轮询自愈 Telegram 通知改为可选  
+  - 环境变量 `TG_NOTIFY_POLLING_ALERTS`：设为 `1` 时向 `MY_CHAT_ID` 发送 Polling 错误重启与看门狗 `getMe` 失败重启通知；默认不发送（日志与自动重启行为不变）  
 
 **2.3.3**版，增强稳定性与监控能力  
   - 新增 Telegram 轮询健康看门狗：定期通过 `getMe` 探测 TG API 可达性，异常时自动重启轮询  
@@ -83,6 +85,8 @@ services:
       # - MESSAGE_CLEAR_HOURS=720
       # 隐藏启动消息，填入1隐藏，留空或者不为1则不隐藏
       # - HIDE_START_MESSAGE=1
+      # 轮询自愈时是否向 MY_CHAT_ID 发 Telegram（1=发送，0或留空=不发）
+      # - TG_NOTIFY_POLLING_ALERTS=1
       # MongoDB连接配置
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_NAME=hi2chatbot
@@ -250,6 +254,7 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 | `ALLOW_EDIT` | 是否允许编辑消息 | `0`（不允许） |
 | `MESSAGE_CLEAR_HOURS` | 自动清除消息关系记录的时间，单位：小时 | `720`（30天） |
 | `HIDE_START_MESSAGE` | 隐藏启动消息，填入1隐藏，留空或者不为1则不隐藏 | 留空 |
+| `TG_NOTIFY_POLLING_ALERTS` | 轮询自愈时是否向 `MY_CHAT_ID` 发 Telegram（Polling 错误重启、看门狗 `getMe` 失败重启）；填入 `1` 发送 | `0`（不发送） |
 | `ENABLE_DC_PING` | 启用DC Ping功能，填入1启用，留空或者不为1则不启用 | 留空 |
 | `MONGODB_URL` | MongoDB连接地址 | `mongodb://mongodb:27017` |
 | `MONGODB_NAME` | MongoDB数据库名称 | `hi2chatbot` |
@@ -273,6 +278,7 @@ wget https://raw.githubusercontent.com/hi2shark/hi2-chat-bot/main/install_hi2cha
 
 ## 更新日志
 
+- `2.3.4`：轮询自愈相关 Telegram 通知改为环境变量 `TG_NOTIFY_POLLING_ALERTS` 控制（默认不通知管理员）
 - `2.3.2`：新增智能审核模式，AI可判断广告或无意义内容并采取不同措施
 - `2.3.0`：新增人机验证功能  
 - `2.2.0`：新增AI审核功能  
